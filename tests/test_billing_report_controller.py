@@ -36,6 +36,28 @@ class TestBuildXlsx(TransactionCase):
         wb = load_workbook(io.BytesIO(payload), read_only=True)
         self.assertIn("Billing Report", wb.sheetnames)
 
+    def test_build_xlsx_with_user_breakdowns(self):
+        """When there are aggregated rows the workbook still renders.
+
+        We synthesise a payload with both ``top_salespersons`` and
+        ``top_creators`` set so the breakdown writer in the controller
+        is exercised.
+        """
+        data = self.env["billing.report"].get_report_data({})
+        data["top_salespersons"] = [{
+            "user_id": 1, "user_name": "Tester Sales",
+            "count": 1, "amount_total": 100.0,
+            "amount_paid": 60.0, "amount_pending": 40.0,
+        }]
+        data["top_creators"] = [{
+            "user_id": 1, "user_name": "Tester Creator",
+            "count": 1, "amount_total": 100.0,
+            "amount_paid": 60.0, "amount_pending": 40.0,
+        }]
+        payload = BillingReportController()._build_xlsx(data, env=self.env)
+        self.assertEqual(payload[:2], b"PK")
+        self.assertGreater(len(payload), 1000)
+
 
 @tagged("post_install", "-at_install")
 class TestXlsxRoute(HttpCase):

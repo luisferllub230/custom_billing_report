@@ -88,6 +88,8 @@ class BillingReport(models.AbstractModel):
             "payment_method_ids": [],
             "company_ids": self.env.companies.ids,
             "l10n_latam_document_type_ids": [],
+            "invoice_user_ids": [],
+            "create_user_ids": [],
             "trend_granularity": "auto",
         }
 
@@ -121,6 +123,10 @@ class BillingReport(models.AbstractModel):
             domain.append(("partner_id", "in", options["partner_ids"]))
         if options.get("company_ids"):
             domain.append(("company_id", "in", options["company_ids"]))
+        if options.get("invoice_user_ids"):
+            domain.append(("invoice_user_id", "in", options["invoice_user_ids"]))
+        if options.get("create_user_ids"):
+            domain.append(("create_uid", "in", options["create_user_ids"]))
 
         payment_state = options.get("payment_state") or "all"
         if payment_state == "paid":
@@ -228,6 +234,10 @@ class BillingReport(models.AbstractModel):
             "name": move.name or "",
             "partner_id": move.partner_id.id,
             "partner_name": move.partner_id.display_name or "",
+            "invoice_user_id": move.invoice_user_id.id if move.invoice_user_id else False,
+            "invoice_user_name": move.invoice_user_id.display_name or "",
+            "create_user_id": move.create_uid.id if move.create_uid else False,
+            "create_user_name": move.create_uid.display_name or "",
             "ncf": self._get_ncf(move),
             "amount_untaxed": move.amount_untaxed,
             "discount": self._get_discount_amount(move),
@@ -355,6 +365,57 @@ class BillingReport(models.AbstractModel):
             reverse=True,
         )[:10]
 
+        # Per-salesperson aggregation. Moves without an invoice_user_id
+        # bucket into a "Sin asignar" group so totals always reconcile.
+        by_user = {}
+        for line in lines:
+            key = line["invoice_user_id"] or 0
+            if key not in by_user:
+                by_user[key] = {
+                    "user_id": line["invoice_user_id"] or False,
+                    "user_name": line["invoice_user_name"] or _("Unassigned"),
+                    "count": 0,
+                    "amount_total": 0.0,
+                    "amount_paid": 0.0,
+                    "amount_pending": 0.0,
+                }
+            entry = by_user[key]
+            entry["count"] += 1
+            entry["amount_total"] += line["amount_total"]
+            entry["amount_paid"] += line["amount_paid"]
+            entry["amount_pending"] += line["amount_residual"]
+        top_salespersons = sorted(
+            by_user.values(),
+            key=lambda d: d["amount_total"],
+            reverse=True,
+        )
+
+        # Per-creator aggregation (account.move.create_uid). Same shape
+        # as the salesperson breakdown so the dashboard/report can reuse
+        # the rendering logic.
+        by_creator = {}
+        for line in lines:
+            key = line["create_user_id"] or 0
+            if key not in by_creator:
+                by_creator[key] = {
+                    "user_id": line["create_user_id"] or False,
+                    "user_name": line["create_user_name"] or _("Unassigned"),
+                    "count": 0,
+                    "amount_total": 0.0,
+                    "amount_paid": 0.0,
+                    "amount_pending": 0.0,
+                }
+            entry = by_creator[key]
+            entry["count"] += 1
+            entry["amount_total"] += line["amount_total"]
+            entry["amount_paid"] += line["amount_paid"]
+            entry["amount_pending"] += line["amount_residual"]
+        top_creators = sorted(
+            by_creator.values(),
+            key=lambda d: d["amount_total"],
+            reverse=True,
+        )
+
         # Trend series — aggregates the dataset on the requested
         # granularity (day / week / month). 'auto' picks based on the
         # span: <=31 days → day, <=120 days → week, else month.
@@ -424,6 +485,8 @@ class BillingReport(models.AbstractModel):
             "lines": lines,
             "totals": totals,
             "top_customers": top_customers,
+            "top_salespersons": top_salespersons,
+            "top_creators": top_creators,
             "trend": trend,
             "health": health,
             "breakdown_status": {

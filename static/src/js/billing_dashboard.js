@@ -13,6 +13,8 @@ import { BillingTrendChart } from "./billing_trend_chart";
 import { BillingHealthGauge } from "./billing_health_gauge";
 import { BillingPaidPieChart } from "./billing_paid_pie_chart";
 import { BillingTopCustomersChart } from "./billing_top_customers_chart";
+import { BillingTopSalespersonsChart } from "./billing_top_salespersons_chart";
+import { BillingTopCreatorsChart } from "./billing_top_creators_chart";
 
 const PAGE_SIZE = 50;
 
@@ -22,6 +24,7 @@ export class BillingDashboard extends Component {
         Layout, Pager, Dropdown, DropdownItem,
         BillingTrendChart, BillingHealthGauge,
         BillingPaidPieChart, BillingTopCustomersChart,
+        BillingTopSalespersonsChart, BillingTopCreatorsChart,
     };
     static props = ["*"];
 
@@ -44,6 +47,8 @@ export class BillingDashboard extends Component {
                 payment_method_ids: initialOptions.payment_method_ids || [],
                 company_ids: initialOptions.company_ids || [],
                 l10n_latam_document_type_ids: initialOptions.l10n_latam_document_type_ids || [],
+                invoice_user_ids: initialOptions.invoice_user_ids || [],
+                create_user_ids: initialOptions.create_user_ids || [],
                 active_preset: initialOptions.active_preset || "",
                 trend_granularity: initialOptions.trend_granularity || "auto",
             },
@@ -62,6 +67,8 @@ export class BillingDashboard extends Component {
                     total_untaxed: 0,
                 },
                 top_customers: [],
+                top_salespersons: [],
+                top_creators: [],
                 health: {
                     status: "neutral", label: "",
                     ratio: 0,
@@ -91,6 +98,8 @@ export class BillingDashboard extends Component {
             { key: "invoice_date", label: _t("Date") },
             { key: "name", label: _t("Invoice") },
             { key: "partner_name", label: _t("Customer") },
+            { key: "invoice_user_name", label: _t("Salesperson") },
+            { key: "create_user_name", label: _t("Created By") },
             { key: "ncf", label: _t("NCF") },
             { key: "amount_untaxed", label: _t("Subtotal"), numeric: true },
             { key: "discount", label: _t("Discount"), numeric: true },

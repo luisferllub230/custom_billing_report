@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="custom_billing_report.BillingTopCreatorsChart">
+        <div class="o_billing_chart_wrapper">
+            <canvas t-ref="canvas"/>
+        </div>
+    </t>
+
+</templates>
