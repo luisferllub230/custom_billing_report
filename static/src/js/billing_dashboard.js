@@ -11,6 +11,8 @@ import { Dropdown } from "@web/core/dropdown/dropdown";
 import { DropdownItem } from "@web/core/dropdown/dropdown_item";
 import { BillingTrendChart } from "./billing_trend_chart";
 import { BillingHealthGauge } from "./billing_health_gauge";
+import { BillingPaidPieChart } from "./billing_paid_pie_chart";
+import { BillingTopCustomersChart } from "./billing_top_customers_chart";
 
 const PAGE_SIZE = 50;
 
@@ -19,6 +21,7 @@ export class BillingDashboard extends Component {
     static components = {
         Layout, Pager, Dropdown, DropdownItem,
         BillingTrendChart, BillingHealthGauge,
+        BillingPaidPieChart, BillingTopCustomersChart,
     };
     static props = ["*"];
 

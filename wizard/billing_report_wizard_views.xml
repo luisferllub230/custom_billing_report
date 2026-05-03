@@ -24,9 +24,11 @@
                                    groups="base.group_multi_company"/>
                             <field name="partner_ids"
                                    widget="many2many_tags"
+                                   domain="[('customer_rank', '>', 0)]"
                                    options="{'no_create': True}"/>
                             <field name="payment_method_ids"
                                    widget="many2many_tags"
+                                   domain="[('payment_type', '=', 'inbound')]"
                                    options="{'no_create': True}"/>
                             <field name="l10n_latam_document_type_ids"
                                    widget="many2many_tags"
