@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Wizard form: filter selector + three actions
+        (open dashboard, print PDF, download Excel).
+    -->
+    <record id="view_billing_report_wizard_form" model="ir.ui.view">
+        <field name="name">billing.report.wizard.form</field>
+        <field name="model">billing.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Billing Report">
+                <sheet>
+                    <group>
+                        <group string="Date Range">
+                            <field name="date_range" widget="radio"/>
+                            <field name="date_from"
+                                   readonly="date_range != 'custom'"
+                                   force_save="1"/>
+                            <field name="date_to"
+                                   readonly="date_range != 'custom'"
+                                   force_save="1"/>
+                        </group>
+                        <group string="Filters">
+                            <field name="payment_state" widget="radio"/>
+                            <field name="company_ids"
+                                   widget="many2many_tags"
+                                   options="{'no_create': True}"
+                                   groups="base.group_multi_company"/>
+                            <field name="partner_ids"
+                                   widget="many2many_tags"
+                                   options="{'no_create': True}"/>
+                            <field name="payment_method_ids"
+                                   widget="many2many_tags"
+                                   options="{'no_create': True}"/>
+                            <field name="l10n_latam_document_type_ids"
+                                   widget="many2many_tags"
+                                   options="{'no_create': True}"/>
+                        </group>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_view_dashboard"
+                            type="object"
+                            string="Open Dashboard"
+                            class="btn-primary"/>
+                    <button name="action_print_pdf"
+                            type="object"
+                            string="Print PDF"
+                            class="btn-secondary"/>
+                    <button name="action_print_xlsx"
+                            type="object"
+                            string="Download Excel"
+                            class="btn-secondary"/>
+                    <button string="Cancel"
+                            class="btn-default"
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!--
+        Window action — opens the wizard from the menu.
+    -->
+    <record id="action_billing_report_wizard" model="ir.actions.act_window">
+        <field name="name">Billing Report</field>
+        <field name="res_model">billing.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

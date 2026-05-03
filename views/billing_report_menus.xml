@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Top-level menu — keeps the module discoverable as its own
+        application while staying out of the Accounting menu so it
+        does not shadow the standard reports.
+    -->
+    <menuitem id="menu_billing_report_root"
+              name="Billing Report"
+              sequence="95"/>
+
+    <menuitem id="menu_billing_dashboard"
+              name="Dashboard"
+              parent="menu_billing_report_root"
+              action="action_billing_dashboard"
+              sequence="10"/>
+
+    <menuitem id="menu_billing_report_wizard"
+              name="Generate Report"
+              parent="menu_billing_report_root"
+              action="action_billing_report_wizard"
+              sequence="20"/>
+
+    <!--
+        Convenience entry under the Accounting "Reporting" menu so
+        accountants can find it where they expect.
+    -->
+    <menuitem id="menu_billing_dashboard_in_accounting"
+              name="Billing Dashboard"
+              parent="account.menu_finance_reports"
+              action="action_billing_dashboard"
+              sequence="200"/>
+
+</odoo>

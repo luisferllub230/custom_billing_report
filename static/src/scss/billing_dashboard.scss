@@ -1,0 +1,271 @@
+/*
+ * Billing Dashboard styles.
+ *
+ * Theme-aware: leans on Bootstrap 5.3 / Odoo CSS variables so the
+ * dashboard adapts to both the standard and dark Odoo themes without
+ * per-mode hardcoded colours. Anything that cannot be expressed
+ * through a variable is overridden in the [data-bs-theme="dark"] block.
+ */
+
+.o_billing_dashboard {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    min-height: 100%;
+
+    // KPI accent palette as CSS variables — overridable per theme.
+    --o-billing-accent-invoiced: #1F4E78;
+    --o-billing-accent-paid: #198754;
+    --o-billing-accent-pending: #ffc107;
+    --o-billing-row-hover: rgba(31, 78, 120, 0.06);
+    --o-billing-card-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    --o-billing-skeleton: rgba(0, 0, 0, 0.08);
+    --o-billing-skeleton-shine: rgba(0, 0, 0, 0.04);
+
+    // ----------------------------------------------------------------
+    // Filter bar — sits below the standard control panel
+    // ----------------------------------------------------------------
+
+    .o_billing_filterbar {
+        background-color: var(--bs-tertiary-bg);
+
+        .form-label.small {
+            color: var(--bs-secondary-color);
+            font-weight: 500;
+        }
+    }
+
+    // Active filter chips
+    .o_billing_chip {
+        font-weight: 400;
+        padding: 0.35em 0.6em;
+        font-size: 0.75rem;
+
+        .o_billing_chip_remove {
+            cursor: pointer;
+            opacity: 0.6;
+
+            &:hover {
+                opacity: 1;
+            }
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // KPI cards — compact, icon + value layout
+    // ----------------------------------------------------------------
+
+    .o_billing_kpi {
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border: 1px solid var(--bs-border-color);
+        transition: transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+        &:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--o-billing-card-shadow);
+        }
+
+        .o_billing_kpi_icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bs-tertiary-bg);
+            color: var(--bs-secondary-color);
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .o_billing_kpi_label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--bs-secondary-color);
+            font-weight: 500;
+            line-height: 1.1;
+        }
+
+        .o_billing_kpi_value {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--bs-body-color);
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+
+    .o_billing_kpi_invoiced {
+        border-left: 3px solid var(--o-billing-accent-invoiced);
+        .o_billing_kpi_icon { color: var(--o-billing-accent-invoiced); }
+    }
+    .o_billing_kpi_paid {
+        border-left: 3px solid var(--o-billing-accent-paid);
+        .o_billing_kpi_icon { color: var(--o-billing-accent-paid); }
+    }
+    .o_billing_kpi_pending {
+        border-left: 3px solid var(--o-billing-accent-pending);
+        .o_billing_kpi_icon { color: var(--o-billing-accent-pending); }
+    }
+
+    // ----------------------------------------------------------------
+    // Trend chart wrapper — fixed height so Chart.js can size itself
+    // responsively without collapsing the canvas on first paint.
+    // ----------------------------------------------------------------
+
+    .o_billing_chart_wrapper {
+        position: relative;
+        height: 280px;
+        width: 100%;
+
+        canvas {
+            max-height: 100%;
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Detail table
+    // ----------------------------------------------------------------
+
+    .o_billing_table {
+        font-size: 13px;
+        color: var(--bs-body-color);
+
+        .o_billing_thead th {
+            white-space: nowrap;
+            background-color: var(--bs-tertiary-bg);
+            border-bottom: 1px solid var(--bs-border-color);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            color: var(--bs-secondary-color);
+            font-weight: 600;
+        }
+
+        .o_billing_sortable {
+            cursor: pointer;
+            user-select: none;
+
+            &:hover {
+                color: var(--bs-body-color);
+            }
+        }
+
+        .o_billing_row {
+            cursor: pointer;
+
+            &:hover {
+                background-color: var(--o-billing-row-hover);
+            }
+        }
+
+        .o_billing_tfoot {
+            background-color: var(--bs-tertiary-bg);
+            font-size: 0.85rem;
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Status indicator (Odoo o_status dot pattern)
+    // ----------------------------------------------------------------
+
+    .o_status {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: var(--bs-secondary);
+        vertical-align: middle;
+
+        &.o_status_paid {
+            background-color: var(--o-billing-accent-paid);
+            box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.15);
+        }
+        &.o_status_pending {
+            background-color: var(--o-billing-accent-pending);
+            box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.15);
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Empty state
+    // ----------------------------------------------------------------
+
+    .o_billing_empty {
+        padding: 1rem 0;
+        opacity: 0.85;
+    }
+
+    // ----------------------------------------------------------------
+    // Skeleton loading bars
+    // ----------------------------------------------------------------
+
+    .o_billing_skeleton {
+        td {
+            padding: 0.5rem 0.75rem;
+        }
+
+        .o_billing_skeleton_bar {
+            display: block;
+            height: 12px;
+            width: 100%;
+            border-radius: 4px;
+            background: linear-gradient(
+                90deg,
+                var(--o-billing-skeleton) 0%,
+                var(--o-billing-skeleton-shine) 50%,
+                var(--o-billing-skeleton) 100%
+            );
+            background-size: 200% 100%;
+            animation: o_billing_shimmer 1.4s infinite linear;
+        }
+    }
+
+    @keyframes o_billing_shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    // ----------------------------------------------------------------
+    // Inputs — keep dark mode legible
+    // ----------------------------------------------------------------
+
+    .form-control,
+    .form-select {
+        background-color: var(--bs-body-bg);
+        color: var(--bs-body-color);
+        border-color: var(--bs-border-color);
+    }
+}
+
+/*
+ * Dark mode tuning. Odoo 19 toggles data-bs-theme="dark" on <html> when
+ * the user picks the dark preference; everything below is scoped to it.
+ */
+[data-bs-theme="dark"] .o_billing_dashboard {
+    --o-billing-accent-invoiced: #6FA8DC;
+    --o-billing-accent-paid: #57B57E;
+    --o-billing-accent-pending: #F0C419;
+    --o-billing-row-hover: rgba(111, 168, 220, 0.10);
+    --o-billing-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --o-billing-skeleton: rgba(255, 255, 255, 0.08);
+    --o-billing-skeleton-shine: rgba(255, 255, 255, 0.14);
+
+    .o_billing_kpi .o_billing_kpi_label {
+        color: rgba(255, 255, 255, 0.65);
+    }
+
+    .o_billing_kpi .o_billing_kpi_icon {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .o_status.o_status_paid {
+        box-shadow: 0 0 0 2px rgba(87, 181, 126, 0.25);
+    }
+    .o_status.o_status_pending {
+        box-shadow: 0 0 0 2px rgba(240, 196, 25, 0.25);
+    }
+}

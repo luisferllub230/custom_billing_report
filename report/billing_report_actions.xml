@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        QWeb PDF report action.
+
+        ``model`` is set to billing.report.wizard so that the report
+        is reachable from the wizard footer button. The actual data is
+        taken from the ``data`` argument of report_action, not from the
+        wizard records themselves — see report.custom_billing_report
+        .report_billing_template._get_report_values.
+    -->
+    <record id="action_report_billing" model="ir.actions.report">
+        <field name="name">Billing Report</field>
+        <field name="model">billing.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">custom_billing_report.report_billing_template</field>
+        <field name="report_file">custom_billing_report.report_billing_template</field>
+        <field name="binding_model_id" eval="False"/>
+        <field name="paperformat_id" ref="base.paperformat_euro"/>
+        <field name="print_report_name">"Billing Report - %s" % (object.date_from or "")</field>
+    </record>
+
+</odoo>

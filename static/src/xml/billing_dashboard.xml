@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="custom_billing_report.BillingDashboard">
+        <Layout display="display" className="'o_billing_dashboard'">
+
+            <!--
+                Inject the action buttons into the standard control
+                panel slot reserved for them. This puts Refresh /
+                Export next to the breadcrumbs the same way every
+                Odoo view does.
+            -->
+            <t t-set-slot="control-panel-additional-actions">
+                <button class="btn btn-secondary"
+                        t-on-click="onApplyFilters"
+                        title="Refresh">
+                    <i class="fa fa-refresh"/>
+                </button>
+                <div class="btn-group">
+                    <button class="btn btn-secondary dropdown-toggle"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                        <i class="fa fa-download me-1"/> Export
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="#"
+                               t-on-click.prevent="onPrintPdf">
+                                <i class="fa fa-file-pdf-o me-2 text-danger"/> PDF
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#"
+                               t-on-click.prevent="onPrintXlsx">
+                                <i class="fa fa-file-excel-o me-2 text-success"/> Excel
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </t>
+
+            <!--
+                Filter bar — sits below the control panel. Kept as a
+                custom region because the underlying client action
+                does not own a SearchModel (no record set to filter).
+            -->
+            <div class="o_billing_filterbar p-2 border-bottom">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2 col-6">
+                        <label class="form-label small mb-1">From</label>
+                        <input type="date"
+                               class="form-control form-control-sm"
+                               t-att-value="state.options.date_from"
+                               t-on-change="onDateFromChange"/>
+                    </div>
+                    <div class="col-md-2 col-6">
+                        <label class="form-label small mb-1">To</label>
+                        <input type="date"
+                               class="form-control form-control-sm"
+                               t-att-value="state.options.date_to"
+                               t-on-change="onDateToChange"/>
+                    </div>
+                    <div class="col-md-2 col-6">
+                        <label class="form-label small mb-1">Status</label>
+                        <select class="form-select form-select-sm"
+                                t-on-change="onPaymentStateChange">
+                            <option value="all"
+                                    t-att-selected="state.options.payment_state === 'all'">All</option>
+                            <option value="paid"
+                                    t-att-selected="state.options.payment_state === 'paid'">Paid</option>
+                            <option value="unpaid"
+                                    t-att-selected="state.options.payment_state === 'unpaid'">Pending</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5 col-12">
+                        <label class="form-label small mb-1">Quick Range</label>
+                        <div class="d-flex flex-wrap gap-1" role="group">
+                            <button type="button"
+                                    t-foreach="presets" t-as="preset" t-key="preset.key"
+                                    t-attf-class="btn btn-sm {{ state.options.active_preset === preset.key ? 'btn-primary' : 'btn-outline-secondary' }}"
+                                    t-on-click="() => this.applyPreset(preset.key)">
+                                <t t-esc="preset.label"/>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-1 col-6 text-end">
+                        <button class="btn btn-primary btn-sm w-100"
+                                t-on-click="onApplyFilters">
+                            <i class="fa fa-filter me-1"/> Apply
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active filter chips -->
+                <div t-if="activeChips.length > 0"
+                     class="d-flex flex-wrap gap-1 mt-2">
+                    <span class="text-muted small me-1">Active filters:</span>
+                    <span t-foreach="activeChips" t-as="chip" t-key="chip.key"
+                          class="badge text-bg-light border o_billing_chip">
+                        <t t-esc="chip.label"/>
+                        <i class="fa fa-times ms-2 o_billing_chip_remove"
+                           t-on-click="() => this.removeFilter(chip.key)"/>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="p-3">
+
+                <!-- KPI cards -->
+                <div class="row g-2 mb-3 o_billing_kpis">
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="o_billing_kpi card h-100">
+                            <div class="card-body p-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="o_billing_kpi_icon"><i class="fa fa-file-text-o"/></div>
+                                    <div class="ms-2 flex-grow-1">
+                                        <div class="o_billing_kpi_label">Invoices</div>
+                                        <div class="o_billing_kpi_value"><t t-esc="state.data.totals.count"/></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="o_billing_kpi o_billing_kpi_invoiced card h-100">
+                            <div class="card-body p-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="o_billing_kpi_icon"><i class="fa fa-money"/></div>
+                                    <div class="ms-2 flex-grow-1">
+                                        <div class="o_billing_kpi_label">Total Invoiced</div>
+                                        <div class="o_billing_kpi_value"><t t-esc="formatMoney(state.data.totals.total_invoiced)"/></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="o_billing_kpi o_billing_kpi_paid card h-100">
+                            <div class="card-body p-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="o_billing_kpi_icon"><i class="fa fa-check-circle"/></div>
+                                    <div class="ms-2 flex-grow-1">
+                                        <div class="o_billing_kpi_label">Total Paid</div>
+                                        <div class="o_billing_kpi_value"><t t-esc="formatMoney(state.data.totals.total_paid)"/></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="o_billing_kpi o_billing_kpi_pending card h-100">
+                            <div class="card-body p-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="o_billing_kpi_icon"><i class="fa fa-clock-o"/></div>
+                                    <div class="ms-2 flex-grow-1">
+                                        <div class="o_billing_kpi_label">Total Pending</div>
+                                        <div class="o_billing_kpi_value"><t t-esc="formatMoney(state.data.totals.total_pending)"/></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="o_billing_kpi card h-100">
+                            <div class="card-body p-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="o_billing_kpi_icon"><i class="fa fa-percent"/></div>
+                                    <div class="ms-2 flex-grow-1">
+                                        <div class="o_billing_kpi_label">Total Tax</div>
+                                        <div class="o_billing_kpi_value"><t t-esc="formatMoney(state.data.totals.total_tax)"/></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="o_billing_kpi card h-100">
+                            <div class="card-body p-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="o_billing_kpi_icon"><i class="fa fa-tag"/></div>
+                                    <div class="ms-2 flex-grow-1">
+                                        <div class="o_billing_kpi_label">Total Discount</div>
+                                        <div class="o_billing_kpi_value"><t t-esc="formatMoney(state.data.totals.total_discount)"/></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trend chart -->
+                <div t-if="!state.loading and state.data.trend.length > 0"
+                     class="card mb-3">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="fa fa-line-chart text-primary me-2"/>
+                        <span class="fw-bold">Daily Trend</span>
+                    </div>
+                    <div class="card-body">
+                        <BillingTrendChart trend="state.data.trend" currencyId="currencyId"/>
+                    </div>
+                </div>
+
+                <!-- Detail table -->
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="fa fa-list text-secondary me-2"/>
+                        <span class="fw-bold">Invoices</span>
+                        <div class="ms-auto" t-if="!state.loading and sortedLines.length > 0">
+                            <Pager offset="state.pager.offset"
+                                   limit="state.pager.limit"
+                                   total="sortedLines.length"
+                                   onUpdate.bind="onPagerUpdate"/>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0 o_billing_table">
+                                <thead class="o_billing_thead">
+                                    <tr>
+                                        <th t-foreach="columns" t-as="col" t-key="col.key"
+                                            t-attf-class="o_billing_sortable {{ col.numeric ? 'text-end' : '' }}"
+                                            t-on-click="() => this.onSortBy(col.key)">
+                                            <span><t t-esc="col.label"/></span>
+                                            <i t-if="state.sort.field === col.key"
+                                               t-attf-class="fa ms-1 {{ state.sort.dir === 'asc' ? 'fa-caret-up' : 'fa-caret-down' }}"/>
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                <!-- Skeleton while loading -->
+                                <tbody t-if="state.loading" class="o_billing_skeleton">
+                                    <tr t-foreach="[1,2,3,4,5,6]" t-as="i" t-key="i">
+                                        <td t-foreach="columns" t-as="col" t-key="col.key">
+                                            <span class="o_billing_skeleton_bar"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+
+                                <!-- Real data -->
+                                <tbody t-else="">
+                                    <tr t-foreach="pagedLines" t-as="line" t-key="line.id"
+                                        class="o_billing_row"
+                                        t-on-click="() => this.onOpenInvoice(line.id)">
+                                        <td><t t-esc="line.invoice_date"/></td>
+                                        <td class="fw-bold"><t t-esc="line.name"/></td>
+                                        <td><t t-esc="line.partner_name"/></td>
+                                        <td class="text-monospace"><t t-esc="line.ncf"/></td>
+                                        <td class="text-end"><t t-esc="formatMoney(line.amount_untaxed)"/></td>
+                                        <td class="text-end"><t t-esc="formatMoney(line.discount)"/></td>
+                                        <td class="text-end"><t t-esc="formatMoney(line.amount_tax)"/></td>
+                                        <td class="text-end fw-bold"><t t-esc="formatMoney(line.amount_total)"/></td>
+                                        <td class="text-muted"><t t-esc="line.payment_method"/></td>
+                                        <td>
+                                            <span t-attf-class="o_status o_status_{{ line.payment_state }}"
+                                                  t-att-title="line.status_label"/>
+                                            <span class="ms-1 small"><t t-esc="line.status_label"/></span>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Empty state -->
+                                    <tr t-if="sortedLines.length === 0">
+                                        <td t-att-colspan="columns.length" class="text-center text-muted p-5">
+                                            <div class="o_billing_empty">
+                                                <i class="fa fa-inbox fa-3x text-muted mb-2 d-block"/>
+                                                <div class="fw-bold">No invoices match the selected filters.</div>
+                                                <div class="small">Try widening the date range or clearing filters.</div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+
+                                <!-- Totals row -->
+                                <tfoot t-if="!state.loading and sortedLines.length > 0"
+                                       class="o_billing_tfoot">
+                                    <tr>
+                                        <td colspan="4" class="text-end fw-bold">Totals</td>
+                                        <td class="text-end"><t t-esc="formatMoney(state.data.totals.total_untaxed)"/></td>
+                                        <td class="text-end"><t t-esc="formatMoney(state.data.totals.total_discount)"/></td>
+                                        <td class="text-end"><t t-esc="formatMoney(state.data.totals.total_tax)"/></td>
+                                        <td class="text-end fw-bold"><t t-esc="formatMoney(state.data.totals.total_invoiced)"/></td>
+                                        <td colspan="2"/>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top customers -->
+                <div t-if="!state.loading and state.data.top_customers.length > 0"
+                     class="card mt-3">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="fa fa-trophy text-warning me-2"/>
+                        <span class="fw-bold">Top Customers</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead class="o_billing_thead">
+                                <tr>
+                                    <th>Customer</th>
+                                    <th class="text-end">Total Invoiced</th>
+                                    <th class="text-end">Pending</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="state.data.top_customers" t-as="cust"
+                                    t-key="cust.partner_id">
+                                    <td><t t-esc="cust.partner_name"/></td>
+                                    <td class="text-end"><t t-esc="formatMoney(cust.amount_total)"/></td>
+                                    <td class="text-end"><t t-esc="formatMoney(cust.amount_pending)"/></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </Layout>
+    </t>
+
+</templates>
