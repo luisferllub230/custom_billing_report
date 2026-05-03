@@ -25,6 +25,24 @@ class TestBillingReport(AccountTestInvoicingCommon):
             "company_type": "company",
         })
 
+        # Two internal users used as salesperson / creator markers.
+        # ``user_creator`` posts the invoice fixture, so it needs
+        # accounting permissions on top of the base internal group.
+        accounting_groups = [
+            cls.env.ref("base.group_user").id,
+            cls.env.ref("account.group_account_manager").id,
+        ]
+        cls.user_seller = cls.env["res.users"].create({
+            "name": "Seller One",
+            "login": "seller_one_test@example.com",
+            "groups_id": [(6, 0, accounting_groups)],
+        })
+        cls.user_creator = cls.env["res.users"].create({
+            "name": "Creator One",
+            "login": "creator_one_test@example.com",
+            "groups_id": [(6, 0, accounting_groups)],
+        })
+
         cls.product = cls.env["product.product"].create({
             "name": "Test Product",
             "type": "service",
@@ -44,6 +62,7 @@ class TestBillingReport(AccountTestInvoicingCommon):
         cls.move_paid = cls._create_invoice(
             cls, cls.partner_a, date(2026, 1, 10), price=1000.0,
             discount=0.0, register_payment=True,
+            invoice_user=cls.user_seller, create_user=cls.user_creator,
         )
         cls.move_unpaid = cls._create_invoice(
             cls, cls.partner_b, date(2026, 1, 20), price=500.0,
@@ -55,9 +74,18 @@ class TestBillingReport(AccountTestInvoicingCommon):
         )
 
     def _create_invoice(self, partner, invoice_date, price,
-                        discount=0.0, register_payment=False):
-        """Helper to post a customer invoice and optionally pay it."""
-        move = self.env["account.move"].create({
+                        discount=0.0, register_payment=False,
+                        invoice_user=None, create_user=None):
+        """Helper to post a customer invoice and optionally pay it.
+
+        ``invoice_user`` sets ``invoice_user_id`` (salesperson).
+        ``create_user`` runs the creation as that user so ``create_uid``
+        reflects the desired creator (it cannot be set explicitly).
+        """
+        env = self.env
+        if create_user is not None:
+            env = self.env(user=create_user.id)
+        vals = {
             "move_type": "out_invoice",
             "partner_id": partner.id,
             "invoice_date": invoice_date,
@@ -69,7 +97,10 @@ class TestBillingReport(AccountTestInvoicingCommon):
                 "discount": discount,
                 "tax_ids": [(6, 0, self.tax_itbis.ids)],
             })],
-        })
+        }
+        if invoice_user is not None:
+            vals["invoice_user_id"] = invoice_user.id
+        move = env["account.move"].create(vals)
         move.action_post()
         if register_payment:
             self.env["account.payment.register"].with_context(
@@ -183,12 +214,24 @@ class TestBillingReport(AccountTestInvoicingCommon):
         line = self.service._build_line(self.move_paid)
         expected_keys = {
             "id", "invoice_date", "name", "partner_id", "partner_name",
+            "invoice_user_id", "invoice_user_name",
+            "create_user_id", "create_user_name",
             "ncf", "amount_untaxed", "discount", "amount_tax",
             "amount_total", "amount_residual", "amount_paid",
             "payment_method", "payment_state", "status_label",
             "currency_id", "currency_symbol",
         }
         self.assertTrue(expected_keys.issubset(line.keys()))
+
+    def test_build_line_invoice_user(self):
+        line = self.service._build_line(self.move_paid)
+        self.assertEqual(line["invoice_user_id"], self.user_seller.id)
+        self.assertIn("Seller", line["invoice_user_name"])
+
+    def test_build_line_create_user(self):
+        line = self.service._build_line(self.move_paid)
+        self.assertEqual(line["create_user_id"], self.user_creator.id)
+        self.assertIn("Creator", line["create_user_name"])
 
     # ------------------------------------------------------------------
     # Aggregate payload
@@ -241,3 +284,59 @@ class TestBillingReport(AccountTestInvoicingCommon):
         })
         # Must round-trip through JSON for dashboard RPC.
         json.dumps(data)
+
+    # ------------------------------------------------------------------
+    # Salesperson + creator filters and aggregations
+    # ------------------------------------------------------------------
+
+    def test_domain_filters_by_invoice_user(self):
+        opts = self.service._normalize_options({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "invoice_user_ids": [self.user_seller.id],
+        })
+        domain = self.service._get_invoice_domain(opts)
+        moves = self.env["account.move"].search(domain)
+        self.assertEqual(moves, self.move_paid)
+
+    def test_domain_filters_by_create_user(self):
+        opts = self.service._normalize_options({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "create_user_ids": [self.user_creator.id],
+        })
+        domain = self.service._get_invoice_domain(opts)
+        moves = self.env["account.move"].search(domain)
+        self.assertEqual(moves, self.move_paid)
+
+    def test_top_salespersons_payload(self):
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "company_ids": [self.company.id],
+        })
+        self.assertIn("top_salespersons", data)
+        ids = {sp["user_id"] for sp in data["top_salespersons"]}
+        self.assertIn(self.user_seller.id, ids)
+        seller_entry = next(
+            sp for sp in data["top_salespersons"]
+            if sp["user_id"] == self.user_seller.id
+        )
+        self.assertEqual(seller_entry["count"], 1)
+        self.assertAlmostEqual(seller_entry["amount_total"], 1180.0, places=2)
+        self.assertAlmostEqual(seller_entry["amount_paid"], 1180.0, places=2)
+
+    def test_top_creators_payload(self):
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "company_ids": [self.company.id],
+        })
+        self.assertIn("top_creators", data)
+        ids = {cr["user_id"] for cr in data["top_creators"]}
+        self.assertIn(self.user_creator.id, ids)
+
+    def test_default_options_contain_user_keys(self):
+        opts = self.service._default_options()
+        self.assertEqual(opts["invoice_user_ids"], [])
+        self.assertEqual(opts["create_user_ids"], [])

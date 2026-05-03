@@ -113,6 +113,32 @@ class TestBillingReportWizard(TransactionCase):
         opts = wiz._get_options()
         self.assertEqual(opts["company_ids"], self.env.companies.ids)
 
+    def test_get_options_includes_user_keys(self):
+        """Salesperson and creator filters must round-trip into options."""
+        seller = self.env["res.users"].create({
+            "name": "Wizard Seller",
+            "login": "wiz_seller_test@example.com",
+            "groups_id": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+        creator = self.env["res.users"].create({
+            "name": "Wizard Creator",
+            "login": "wiz_creator_test@example.com",
+            "groups_id": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+        wiz = self.Wizard.create({
+            "invoice_user_ids": [(6, 0, [seller.id])],
+            "create_user_ids": [(6, 0, [creator.id])],
+        })
+        opts = wiz._get_options()
+        self.assertEqual(opts["invoice_user_ids"], [seller.id])
+        self.assertEqual(opts["create_user_ids"], [creator.id])
+
+    def test_get_options_user_keys_default_empty(self):
+        wiz = self.Wizard.create({})
+        opts = wiz._get_options()
+        self.assertEqual(opts["invoice_user_ids"], [])
+        self.assertEqual(opts["create_user_ids"], [])
+
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------

@@ -103,13 +103,15 @@ class BillingReportController(http.Controller):
         sheet.set_column("A:A", 12)  # Date
         sheet.set_column("B:B", 18)  # Invoice
         sheet.set_column("C:C", 35)  # Customer
-        sheet.set_column("D:D", 18)  # NCF
-        sheet.set_column("E:H", 14)  # Money
-        sheet.set_column("I:I", 22)  # Payment Method
-        sheet.set_column("J:J", 16)  # Status
+        sheet.set_column("D:D", 22)  # Salesperson
+        sheet.set_column("E:E", 22)  # Created By
+        sheet.set_column("F:F", 18)  # NCF
+        sheet.set_column("G:J", 14)  # Money
+        sheet.set_column("K:K", 22)  # Payment Method
+        sheet.set_column("L:L", 16)  # Status
 
         # Title row
-        sheet.merge_range("A1:J1", _("Billing Report"), title_fmt)
+        sheet.merge_range("A1:L1", _("Billing Report"), title_fmt)
 
         opts = data["options"]
         status_map = {
@@ -123,7 +125,7 @@ class BillingReportController(http.Controller):
             date_to=opts.get("date_to") or "",
             status=status_map.get(opts.get("payment_state") or "all", ""),
         )
-        sheet.merge_range("A2:J2", meta_line, meta_fmt)
+        sheet.merge_range("A2:L2", meta_line, meta_fmt)
 
         # KPI block (rows 4-5)
         totals = data["totals"]
@@ -141,9 +143,9 @@ class BillingReportController(http.Controller):
 
         # Detail header (row 7 — index 6)
         headers = [
-            _("Date"), _("Invoice"), _("Customer"), _("NCF"),
-            _("Subtotal"), _("Discount"), _("Tax (ITBIS)"), _("Total"),
-            _("Payment Method"), _("Status"),
+            _("Date"), _("Invoice"), _("Customer"), _("Salesperson"),
+            _("Created By"), _("NCF"), _("Subtotal"), _("Discount"),
+            _("Tax (ITBIS)"), _("Total"), _("Payment Method"), _("Status"),
         ]
         header_row = 6
         for col, label in enumerate(headers):
@@ -158,23 +160,60 @@ class BillingReportController(http.Controller):
             sheet.write(row, 0, line["invoice_date"], text_fmt)
             sheet.write(row, 1, line["name"], text_fmt)
             sheet.write(row, 2, line["partner_name"], text_fmt)
-            sheet.write(row, 3, line["ncf"], text_fmt)
-            sheet.write_number(row, 4, line["amount_untaxed"], money_fmt)
-            sheet.write_number(row, 5, line["discount"], money_fmt)
-            sheet.write_number(row, 6, line["amount_tax"], money_fmt)
-            sheet.write_number(row, 7, line["amount_total"], money_fmt)
-            sheet.write(row, 8, line["payment_method"], text_fmt)
-            sheet.write(row, 9, line["status_label"], text_fmt)
+            sheet.write(row, 3, line.get("invoice_user_name", ""), text_fmt)
+            sheet.write(row, 4, line.get("create_user_name", ""), text_fmt)
+            sheet.write(row, 5, line["ncf"], text_fmt)
+            sheet.write_number(row, 6, line["amount_untaxed"], money_fmt)
+            sheet.write_number(row, 7, line["discount"], money_fmt)
+            sheet.write_number(row, 8, line["amount_tax"], money_fmt)
+            sheet.write_number(row, 9, line["amount_total"], money_fmt)
+            sheet.write(row, 10, line["payment_method"], text_fmt)
+            sheet.write(row, 11, line["status_label"], text_fmt)
             row += 1
 
         # Totals row
-        sheet.merge_range(row, 0, row, 3, _("Totals"), total_label_fmt)
-        sheet.write_number(row, 4, totals["total_untaxed"], total_value_fmt)
-        sheet.write_number(row, 5, totals["total_discount"], total_value_fmt)
-        sheet.write_number(row, 6, totals["total_tax"], total_value_fmt)
-        sheet.write_number(row, 7, totals["total_invoiced"], total_value_fmt)
-        sheet.write(row, 8, "", total_value_fmt)
-        sheet.write(row, 9, "", total_value_fmt)
+        sheet.merge_range(row, 0, row, 5, _("Totals"), total_label_fmt)
+        sheet.write_number(row, 6, totals["total_untaxed"], total_value_fmt)
+        sheet.write_number(row, 7, totals["total_discount"], total_value_fmt)
+        sheet.write_number(row, 8, totals["total_tax"], total_value_fmt)
+        sheet.write_number(row, 9, totals["total_invoiced"], total_value_fmt)
+        sheet.write(row, 10, "", total_value_fmt)
+        sheet.write(row, 11, "", total_value_fmt)
+        row += 2
+
+        # Reusable user-breakdown writer (Salesperson / Created By).
+        def _write_user_breakdown(start_row, title, header_label, rows):
+            r = start_row
+            sheet.merge_range(r, 0, r, 4, title, title_fmt)
+            r += 1
+            br_headers = [
+                header_label, _("Invoices"), _("Total Invoiced"),
+                _("Paid"), _("Pending"),
+            ]
+            for col, label in enumerate(br_headers):
+                sheet.write(r, col, label, header_fmt)
+            sheet.set_row(r, 22)
+            r += 1
+            for entry in rows:
+                sheet.write(r, 0, entry.get("user_name") or "", text_fmt)
+                sheet.write_number(r, 1, entry.get("count") or 0, text_fmt)
+                sheet.write_number(r, 2, entry.get("amount_total") or 0.0, money_fmt)
+                sheet.write_number(r, 3, entry.get("amount_paid") or 0.0, money_fmt)
+                sheet.write_number(r, 4, entry.get("amount_pending") or 0.0, money_fmt)
+                r += 1
+            return r + 1  # blank line between sections
+
+        salespersons = data.get("top_salespersons") or []
+        if salespersons:
+            row = _write_user_breakdown(
+                row, _("By Salesperson"), _("Salesperson"), salespersons,
+            )
+
+        creators = data.get("top_creators") or []
+        if creators:
+            row = _write_user_breakdown(
+                row, _("By Created By"), _("Created By"), creators,
+            )
 
         workbook.close()
         return buffer.getvalue()

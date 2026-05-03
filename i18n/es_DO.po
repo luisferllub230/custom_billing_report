@@ -532,3 +532,80 @@ msgstr "Semana"
 msgid "Month"
 msgstr "Mes"
 
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__invoice_user_ids
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Salespersons"
+msgstr "Vendedores"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Salesperson"
+msgstr "Vendedor"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,help:custom_billing_report.field_billing_report_wizard__invoice_user_ids
+msgid "Leave empty to include every salesperson."
+msgstr "Dejar vacio para incluir todos los vendedores."
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Top Salespersons"
+msgstr "Mejores Vendedores"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Salespersons — Detail"
+msgstr "Vendedores — Detalle"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/controllers/main.py:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "By Salesperson"
+msgstr "Por Vendedor"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+msgid "Unassigned"
+msgstr "Sin Asignar"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__create_user_ids
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Created By"
+msgstr "Creado Por"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,help:custom_billing_report.field_billing_report_wizard__create_user_ids
+msgid "Leave empty to include every invoice creator."
+msgstr "Dejar vacio para incluir todos los creadores de facturas."
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Top Creators"
+msgstr "Mejores Creadores"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Created By — Detail"
+msgstr "Creado Por — Detalle"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/controllers/main.py:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "By Created By"
+msgstr "Por Creador"
+

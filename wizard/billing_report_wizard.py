@@ -96,6 +96,24 @@ class BillingReportWizard(models.TransientModel):
         help="Filter by Dominican Republic NCF type. Only available "
              "when l10n_latam_invoice_document is installed.",
     )
+    invoice_user_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="billing_report_wizard_user_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Salespersons",
+        domain="[('share', '=', False)]",
+        help="Leave empty to include every salesperson.",
+    )
+    create_user_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="billing_report_wizard_creator_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Created By",
+        domain="[('share', '=', False)]",
+        help="Leave empty to include every invoice creator.",
+    )
 
     # ------------------------------------------------------------------
     # Defaults
@@ -163,6 +181,8 @@ class BillingReportWizard(models.TransientModel):
             "payment_method_ids": self.payment_method_ids.ids,
             "company_ids": self.company_ids.ids or self.env.companies.ids,
             "l10n_latam_document_type_ids": self.l10n_latam_document_type_ids.ids,
+            "invoice_user_ids": self.invoice_user_ids.ids,
+            "create_user_ids": self.create_user_ids.ids,
         }
 
     # ------------------------------------------------------------------
