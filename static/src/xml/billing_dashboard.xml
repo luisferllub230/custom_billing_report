@@ -4,46 +4,28 @@
     <t t-name="custom_billing_report.BillingDashboard">
         <Layout display="display" className="'o_billing_dashboard'">
 
-            <!--
-                Inject the action buttons into the standard control
-                panel slot reserved for them. This puts Refresh /
-                Export next to the breadcrumbs the same way every
-                Odoo view does.
-            -->
             <t t-set-slot="control-panel-additional-actions">
                 <button class="btn btn-secondary"
                         t-on-click="onApplyFilters"
                         title="Refresh">
                     <i class="fa fa-refresh"/>
                 </button>
-                <div class="btn-group">
-                    <button class="btn btn-secondary dropdown-toggle"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false">
+                <Dropdown>
+                    <button class="btn btn-secondary">
                         <i class="fa fa-download me-1"/> Export
+                        <i class="fa fa-caret-down ms-1"/>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li>
-                            <a class="dropdown-item" href="#"
-                               t-on-click.prevent="onPrintPdf">
-                                <i class="fa fa-file-pdf-o me-2 text-danger"/> PDF
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="#"
-                               t-on-click.prevent="onPrintXlsx">
-                                <i class="fa fa-file-excel-o me-2 text-success"/> Excel
-                            </a>
-                        </li>
-                    </ul>
-                </div>
+                    <t t-set-slot="content">
+                        <DropdownItem onSelected.bind="onPrintPdf">
+                            <i class="fa fa-file-pdf-o me-2 text-danger"/> PDF
+                        </DropdownItem>
+                        <DropdownItem onSelected.bind="onPrintXlsx">
+                            <i class="fa fa-file-excel-o me-2 text-success"/> Excel
+                        </DropdownItem>
+                    </t>
+                </Dropdown>
             </t>
 
-            <!--
-                Filter bar — sits below the control panel. Kept as a
-                custom region because the underlying client action
-                does not own a SearchModel (no record set to filter).
-            -->
             <div class="o_billing_filterbar p-2 border-bottom">
                 <div class="row g-2 align-items-end">
                     <div class="col-md-2 col-6">
@@ -74,10 +56,10 @@
                     </div>
                     <div class="col-md-5 col-12">
                         <label class="form-label small mb-1">Quick Range</label>
-                        <div class="d-flex flex-wrap gap-1" role="group">
+                        <div class="d-flex flex-wrap gap-2 o_billing_presets" role="group">
                             <button type="button"
                                     t-foreach="presets" t-as="preset" t-key="preset.key"
-                                    t-attf-class="btn btn-sm {{ state.options.active_preset === preset.key ? 'btn-primary' : 'btn-outline-secondary' }}"
+                                    t-attf-class="btn btn-sm px-3 {{ state.options.active_preset === preset.key ? 'btn-primary' : 'btn-outline-secondary' }}"
                                     t-on-click="() => this.applyPreset(preset.key)">
                                 <t t-esc="preset.label"/>
                             </button>
@@ -104,8 +86,8 @@
                 </div>
             </div>
 
-            <!-- Body -->
-            <div class="p-3">
+            <!-- Scrollable body (flex child of o_billing_dashboard) -->
+            <div class="o_billing_body">
 
                 <!-- KPI cards -->
                 <div class="row g-2 mb-3 o_billing_kpis">
@@ -192,9 +174,17 @@
                 <!-- Trend chart -->
                 <div t-if="!state.loading and state.data.trend.length > 0"
                      class="card mb-3">
-                    <div class="card-header d-flex align-items-center">
+                    <div class="card-header d-flex align-items-center flex-wrap gap-2">
                         <i class="fa fa-line-chart text-primary me-2"/>
-                        <span class="fw-bold">Daily Trend</span>
+                        <span class="fw-bold">Trend</span>
+                        <div class="ms-auto btn-group btn-group-sm" role="group">
+                            <button type="button"
+                                    t-foreach="granularities" t-as="g" t-key="g.key"
+                                    t-attf-class="btn {{ state.options.trend_granularity === g.key ? 'btn-primary' : 'btn-outline-secondary' }}"
+                                    t-on-click="() => this.setGranularity(g.key)">
+                                <t t-esc="g.label"/>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <BillingTrendChart trend="state.data.trend" currencyId="currencyId"/>
@@ -287,31 +277,60 @@
                     </div>
                 </div>
 
-                <!-- Top customers -->
-                <div t-if="!state.loading and state.data.top_customers.length > 0"
-                     class="card mt-3">
-                    <div class="card-header d-flex align-items-center">
-                        <i class="fa fa-trophy text-warning me-2"/>
-                        <span class="fw-bold">Top Customers</span>
+                <!--
+                    Bottom row — split into two columns so the
+                    dashboard isn't a long stack of full-width cards.
+                    Top Customers (col-lg-7) and Collection Health
+                    (col-lg-5) sit side by side on wide screens and
+                    stack vertically on smaller ones.
+                -->
+                <div t-if="!state.loading" class="row g-3 mt-1">
+                    <div t-if="state.data.top_customers.length > 0"
+                         class="col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-header d-flex align-items-center">
+                                <i class="fa fa-trophy text-warning me-2"/>
+                                <span class="fw-bold">Top Customers</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <table class="table table-sm mb-0">
+                                    <thead class="o_billing_thead">
+                                        <tr>
+                                            <th>Customer</th>
+                                            <th class="text-end">Total Invoiced</th>
+                                            <th class="text-end">Paid</th>
+                                            <th class="text-end">Pending</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="state.data.top_customers" t-as="cust"
+                                            t-key="cust.partner_id">
+                                            <td><t t-esc="cust.partner_name"/></td>
+                                            <td class="text-end"><t t-esc="formatMoney(cust.amount_total)"/></td>
+                                            <td class="text-end text-success">
+                                                <t t-esc="formatMoney(cust.amount_paid)"/>
+                                            </td>
+                                            <td class="text-end text-warning">
+                                                <t t-esc="formatMoney(cust.amount_pending)"/>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body p-0">
-                        <table class="table table-sm mb-0">
-                            <thead class="o_billing_thead">
-                                <tr>
-                                    <th>Customer</th>
-                                    <th class="text-end">Total Invoiced</th>
-                                    <th class="text-end">Pending</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr t-foreach="state.data.top_customers" t-as="cust"
-                                    t-key="cust.partner_id">
-                                    <td><t t-esc="cust.partner_name"/></td>
-                                    <td class="text-end"><t t-esc="formatMoney(cust.amount_total)"/></td>
-                                    <td class="text-end"><t t-esc="formatMoney(cust.amount_pending)"/></td>
-                                </tr>
-                            </tbody>
-                        </table>
+
+                    <div class="col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-header d-flex align-items-center">
+                                <i class="fa fa-heartbeat text-danger me-2"/>
+                                <span class="fw-bold">Collection Health</span>
+                            </div>
+                            <div class="card-body">
+                                <BillingHealthGauge health="state.data.health"
+                                                    currencyId="currencyId"/>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

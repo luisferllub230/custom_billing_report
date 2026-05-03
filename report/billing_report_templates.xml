@@ -1,86 +1,187 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-
-    <!--
-        Main QWeb template for the Billing PDF report.
-
-        Receives the rendering context built by
-        report.custom_billing_report.report_billing_template
-        ._get_report_values:
-
-            data         => billing.report.get_report_data(options)
-            doc_ids      => wizard ids
-            docs         => wizard recordset
-
-        We resolve ``company`` and ``currency`` once at the top so the
-        rest of the template stays readable.
-    -->
     <template id="report_billing_template">
         <t t-call="web.html_container">
             <t t-call="web.external_layout">
                 <t t-set="company" t-value="res_company or env.company"/>
                 <t t-set="currency" t-value="company.currency_id"/>
-                <div class="page">
+                <t t-set="opts" t-value="data['options']"/>
+                <t t-set="totals" t-value="data['totals']"/>
+                <t t-set="status_breakdown" t-value="data.get('breakdown_status') or {}"/>
+                <t t-set="doc_type_breakdown" t-value="data.get('breakdown_doc_type') or []"/>
 
-                    <h2 class="mt16 mb16">Billing Report</h2>
+                <div class="page o_billing_pdf">
+                    <style>
+                        .o_billing_pdf { font-size: 10px; }
+                        .o_billing_pdf h2 { font-size: 16px; }
+                        .o_billing_pdf table { margin-bottom: 8px; }
+                        .o_billing_pdf table th,
+                        .o_billing_pdf table td { padding: 3px 4px; }
+                        .o_billing_pdf .o_billing_summary { font-size: 10px; }
+                    </style>
 
-                    <!-- Filter summary -->
-                    <div class="row mb16">
-                        <div class="col-6">
-                            <strong>Period:</strong>
-                            <span t-esc="data['options']['date_from']"/>
-                            &#8594;
-                            <span t-esc="data['options']['date_to']"/>
+                    <h2 class="mb-2">Billing Report</h2>
+
+                    <div class="row mb-2">
+                        <div class="col-7">
+                            <table class="table table-sm table-borderless mb-0">
+                                <tr>
+                                    <td class="fw-bold" style="width: 25%;">Period:</td>
+                                    <td>
+                                        <span t-esc="opts.get('date_from') or ''"/>
+                                        <t t-if="opts.get('date_from') or opts.get('date_to')">&#160;&#8594;&#160;</t>
+                                        <span t-esc="opts.get('date_to') or ''"/>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Status:</td>
+                                    <td>
+                                        <t t-if="opts.get('payment_state') == 'paid'">Paid</t>
+                                        <t t-elif="opts.get('payment_state') == 'unpaid'">Pending Payment</t>
+                                        <t t-else="">All</t>
+                                    </td>
+                                </tr>
+                                <tr t-if="opts.get('partner_ids')">
+                                    <td class="fw-bold">Customers:</td>
+                                    <td>
+                                        <span t-esc="', '.join(env['res.partner'].browse(opts['partner_ids']).mapped('display_name'))"/>
+                                    </td>
+                                </tr>
+                                <tr t-if="opts.get('payment_method_ids')">
+                                    <td class="fw-bold">Payment Methods:</td>
+                                    <td>
+                                        <span t-esc="', '.join(env['account.payment.method.line'].browse(opts['payment_method_ids']).mapped('name'))"/>
+                                    </td>
+                                </tr>
+                                <tr t-if="opts.get('l10n_latam_document_type_ids')">
+                                    <td class="fw-bold">NCF Types:</td>
+                                    <td>
+                                        <span t-esc="', '.join(env['l10n_latam.document.type'].browse(opts['l10n_latam_document_type_ids']).mapped('display_name'))"/>
+                                    </td>
+                                </tr>
+                            </table>
                         </div>
-                        <div class="col-6 text-right">
-                            <strong>Status:</strong>
-                            <t t-if="data['options']['payment_state'] == 'all'">All</t>
-                            <t t-elif="data['options']['payment_state'] == 'paid'">Paid</t>
-                            <t t-elif="data['options']['payment_state'] == 'unpaid'">Pending Payment</t>
+
+                        <!-- Right-hand totals summary (KPIs + breakdowns) -->
+                        <div class="col-5 o_billing_summary">
+                            <table class="table table-sm table-bordered mb-2">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th colspan="2">Summary</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-bold">Invoices</td>
+                                        <td class="text-end"><t t-esc="totals['count']"/></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Total Invoiced</td>
+                                        <td class="text-end">
+                                            <span t-esc="totals['total_invoiced']"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Total Paid</td>
+                                        <td class="text-end">
+                                            <span t-esc="totals['total_paid']"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Total Pending</td>
+                                        <td class="text-end">
+                                            <span t-esc="totals['total_pending']"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Total Tax</td>
+                                        <td class="text-end">
+                                            <span t-esc="totals['total_tax']"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">Total Discount</td>
+                                        <td class="text-end">
+                                            <span t-esc="totals['total_discount']"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- Breakdown by payment status -->
+                            <table class="table table-sm table-bordered mb-2">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th>By Status</th>
+                                        <th class="text-end">#</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Paid</td>
+                                        <td class="text-end">
+                                            <span t-esc="status_breakdown.get('paid', {}).get('count', 0)"/>
+                                        </td>
+                                        <td class="text-end">
+                                            <span t-esc="status_breakdown.get('paid', {}).get('amount_total', 0.0)"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Pending Payment</td>
+                                        <td class="text-end">
+                                            <span t-esc="status_breakdown.get('pending', {}).get('count', 0)"/>
+                                        </td>
+                                        <td class="text-end">
+                                            <span t-esc="status_breakdown.get('pending', {}).get('amount_total', 0.0)"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <!-- Breakdown by document / NCF type -->
+                            <table t-if="doc_type_breakdown"
+                                   class="table table-sm table-bordered mb-0">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th>By Document Type</th>
+                                        <th class="text-end">#</th>
+                                        <th class="text-end">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="doc_type_breakdown" t-as="row">
+                                        <td><span t-esc="row['name']"/></td>
+                                        <td class="text-end"><span t-esc="row['count']"/></td>
+                                        <td class="text-end">
+                                            <span t-esc="row['amount_total']"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    <!-- KPI strip -->
-                    <table class="table table-sm mb16" style="background-color:#f7f7f7;">
-                        <tr>
-                            <td><strong>Invoices</strong><br/>
-                                <span t-esc="data['totals']['count']"/>
-                            </td>
-                            <td><strong>Total Invoiced</strong><br/>
-                                <span t-esc="data['totals']['total_invoiced']"
-                                      t-options="{'widget': 'monetary', 'display_currency': currency}"/>
-                            </td>
-                            <td><strong>Total Paid</strong><br/>
-                                <span t-esc="data['totals']['total_paid']"
-                                      t-options="{'widget': 'monetary', 'display_currency': currency}"/>
-                            </td>
-                            <td><strong>Total Pending</strong><br/>
-                                <span t-esc="data['totals']['total_pending']"
-                                      t-options="{'widget': 'monetary', 'display_currency': currency}"/>
-                            </td>
-                            <td><strong>Total Tax</strong><br/>
-                                <span t-esc="data['totals']['total_tax']"
-                                      t-options="{'widget': 'monetary', 'display_currency': currency}"/>
-                            </td>
-                            <td><strong>Total Discount</strong><br/>
-                                <span t-esc="data['totals']['total_discount']"
-                                      t-options="{'widget': 'monetary', 'display_currency': currency}"/>
-                            </td>
-                        </tr>
-                    </table>
-
                     <!-- Detail table -->
-                    <table class="table table-sm o_main_table">
+                    <table class="table table-sm table-bordered o_main_table">
                         <thead>
-                            <tr>
+                            <tr class="table-light">
                                 <th>Date</th>
                                 <th>Invoice</th>
                                 <th>Customer</th>
                                 <th>NCF</th>
-                                <th class="text-right">Subtotal</th>
-                                <th class="text-right">Discount</th>
-                                <th class="text-right">Tax (ITBIS)</th>
-                                <th class="text-right">Total</th>
+                                <th class="text-end">Subtotal</th>
+                                <th class="text-end">Discount</th>
+                                <th class="text-end">Tax (ITBIS)</th>
+                                <th class="text-end">Total</th>
                                 <th>Payment Method</th>
                                 <th>Status</th>
                             </tr>
@@ -91,19 +192,19 @@
                                 <td><span t-esc="line['name']"/></td>
                                 <td><span t-esc="line['partner_name']"/></td>
                                 <td><span t-esc="line['ncf']"/></td>
-                                <td class="text-right">
+                                <td class="text-end">
                                     <span t-esc="line['amount_untaxed']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
-                                <td class="text-right">
+                                <td class="text-end">
                                     <span t-esc="line['discount']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
-                                <td class="text-right">
+                                <td class="text-end">
                                     <span t-esc="line['amount_tax']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
-                                <td class="text-right">
+                                <td class="text-end">
                                     <span t-esc="line['amount_total']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
@@ -117,22 +218,22 @@
                             </tr>
                         </tbody>
                         <tfoot>
-                            <tr style="font-weight:bold;border-top:2px solid #333;">
-                                <td colspan="4" class="text-right">Totals</td>
-                                <td class="text-right">
-                                    <span t-esc="data['totals']['total_untaxed']"
+                            <tr class="fw-bold table-light">
+                                <td colspan="4" class="text-end">Totals</td>
+                                <td class="text-end">
+                                    <span t-esc="totals['total_untaxed']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
-                                <td class="text-right">
-                                    <span t-esc="data['totals']['total_discount']"
+                                <td class="text-end">
+                                    <span t-esc="totals['total_discount']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
-                                <td class="text-right">
-                                    <span t-esc="data['totals']['total_tax']"
+                                <td class="text-end">
+                                    <span t-esc="totals['total_tax']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
-                                <td class="text-right">
-                                    <span t-esc="data['totals']['total_invoiced']"
+                                <td class="text-end">
+                                    <span t-esc="totals['total_invoiced']"
                                           t-options="{'widget': 'monetary', 'display_currency': currency}"/>
                                 </td>
                                 <td colspan="2"/>
@@ -140,10 +241,9 @@
                         </tfoot>
                     </table>
 
-                    <p class="text-muted mt16" style="font-size:10px;">
+                    <p class="text-muted small mt-2 mb-0">
                         Generated on <span t-esc="data['generated_at']"/>
                     </p>
-
                 </div>
             </t>
         </t>

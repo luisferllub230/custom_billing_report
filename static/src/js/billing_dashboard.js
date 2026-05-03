@@ -7,13 +7,19 @@ import { _t } from "@web/core/l10n/translation";
 import { formatMonetary } from "@web/views/fields/formatters";
 import { Layout } from "@web/search/layout";
 import { Pager } from "@web/core/pager/pager";
+import { Dropdown } from "@web/core/dropdown/dropdown";
+import { DropdownItem } from "@web/core/dropdown/dropdown_item";
 import { BillingTrendChart } from "./billing_trend_chart";
+import { BillingHealthGauge } from "./billing_health_gauge";
 
 const PAGE_SIZE = 50;
 
 export class BillingDashboard extends Component {
     static template = "custom_billing_report.BillingDashboard";
-    static components = { Layout, Pager, BillingTrendChart };
+    static components = {
+        Layout, Pager, Dropdown, DropdownItem,
+        BillingTrendChart, BillingHealthGauge,
+    };
     static props = ["*"];
 
     setup() {
@@ -36,6 +42,7 @@ export class BillingDashboard extends Component {
                 company_ids: initialOptions.company_ids || [],
                 l10n_latam_document_type_ids: initialOptions.l10n_latam_document_type_ids || [],
                 active_preset: initialOptions.active_preset || "",
+                trend_granularity: initialOptions.trend_granularity || "auto",
             },
             sort: { field: "invoice_date", dir: "asc" },
             pager: { offset: 0, limit: PAGE_SIZE },
@@ -52,6 +59,12 @@ export class BillingDashboard extends Component {
                     total_untaxed: 0,
                 },
                 top_customers: [],
+                health: {
+                    status: "neutral", label: "",
+                    ratio: 0,
+                    paid_amount: 0, pending_amount: 0,
+                    paid_count: 0, pending_count: 0, total_count: 0,
+                },
                 company: { currency_id: false, currency_symbol: "" },
             },
         });
@@ -62,6 +75,13 @@ export class BillingDashboard extends Component {
             { key: "this_week", label: _t("This Week") },
             { key: "this_month", label: _t("This Month") },
             { key: "last_month", label: _t("Last Month") },
+        ];
+
+        this.granularities = [
+            { key: "auto", label: _t("Auto") },
+            { key: "day", label: _t("Day") },
+            { key: "week", label: _t("Week") },
+            { key: "month", label: _t("Month") },
         ];
 
         this.columns = [
@@ -234,6 +254,11 @@ export class BillingDashboard extends Component {
     }
 
     onApplyFilters() {
+        this.loadData();
+    }
+
+    setGranularity(granularity) {
+        this.state.options.trend_granularity = granularity;
         this.loadData();
     }
 

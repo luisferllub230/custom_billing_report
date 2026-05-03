@@ -5,14 +5,6 @@ import { loadBundle } from "@web/core/assets";
 import { _t } from "@web/core/l10n/translation";
 import { formatMonetary } from "@web/views/fields/formatters";
 
-/**
- * Chart.js trend chart for the Billing Dashboard.
- *
- * Renders a stacked bar (paid + pending) per day plus a line for the
- * total invoiced amount. Chart.js itself is loaded on demand via
- * ``loadBundle("web.chartjs_lib")`` — same pattern used by Odoo's
- * graph view, gauge field and journal dashboard graph.
- */
 export class BillingTrendChart extends Component {
     static template = "custom_billing_report.BillingTrendChart";
     static props = {

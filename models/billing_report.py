@@ -18,9 +18,10 @@ Odoo (no localization required). Optional Dominican Republic columns
 relevant modules are installed.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from odoo import _, api, fields, models
+from odoo.exceptions import AccessError
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +51,21 @@ class BillingReport(models.AbstractModel):
     _description = "Billing Report Service"
 
     # ------------------------------------------------------------------
+    # Access control
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _check_report_access(self):
+        """Restrict the report to accounting administrators.
+
+        The dashboard, wizard and PDF/XLSX entry-points all funnel
+        through :meth:`get_report_data`, so guarding here covers every
+        consumer (including direct RPC calls).
+        """
+        if not self.env.user.has_group("account.group_account_manager"):
+            raise AccessError(_("You are not allowed to access the Billing Report."))
+
+    # ------------------------------------------------------------------
     # Options helpers
     # ------------------------------------------------------------------
 
@@ -72,6 +88,7 @@ class BillingReport(models.AbstractModel):
             "payment_method_ids": [],
             "company_ids": self.env.companies.ids,
             "l10n_latam_document_type_ids": [],
+            "trend_granularity": "auto",
         }
 
     @api.model
@@ -230,12 +247,72 @@ class BillingReport(models.AbstractModel):
     # ------------------------------------------------------------------
 
     @api.model
+    def _resolve_granularity(self, options):
+        """Decide the bucketing for the trend chart.
+
+        ``trend_granularity`` may be ``auto`` (default), ``day``,
+        ``week`` or ``month``. ``auto`` picks based on the date range
+        span: <=31d → day, <=120d → week, else month.
+        """
+        gran = (options or {}).get("trend_granularity") or "auto"
+        if gran in ("day", "week", "month"):
+            return gran
+        date_from = options.get("date_from")
+        date_to = options.get("date_to")
+        if not (date_from and date_to):
+            return "day"
+        try:
+            d_from = fields.Date.from_string(date_from)
+            d_to = fields.Date.from_string(date_to)
+        except (TypeError, ValueError):
+            return "day"
+        span = (d_to - d_from).days
+        if span <= 31:
+            return "day"
+        if span <= 120:
+            return "week"
+        return "month"
+
+    @api.model
+    def _bucket_key(self, day_str, granularity):
+        """Return the canonical bucket label for ``day_str``."""
+        d = fields.Date.from_string(day_str)
+        if granularity == "month":
+            return d.replace(day=1).isoformat()
+        if granularity == "week":
+            # ISO week starting Monday — anchor on the Monday date.
+            monday = d - timedelta(days=d.weekday())
+            return monday.isoformat()
+        return d.isoformat()
+
+    @api.model
+    def _build_trend(self, options, lines):
+        granularity = self._resolve_granularity(options)
+        buckets = {}
+        for line in lines:
+            day = line["invoice_date"]
+            if not day:
+                continue
+            key = self._bucket_key(day, granularity)
+            bucket = buckets.setdefault(key, {
+                "invoiced": 0.0, "paid": 0.0, "pending": 0.0,
+            })
+            bucket["invoiced"] += line["amount_total"]
+            bucket["paid"] += line["amount_paid"]
+            bucket["pending"] += line["amount_residual"]
+        trend = [
+            {"date": k, **v} for k, v in sorted(buckets.items())
+        ]
+        return trend, granularity
+
+    @api.model
     def get_report_data(self, options=None):
         """Return ``{options, lines, totals, ...}`` for the given filters.
 
         The returned dict is JSON-serialisable so it can be sent
         verbatim to the OWL dashboard via RPC.
         """
+        self._check_report_access()
         options = self._normalize_options(options)
         domain = self._get_invoice_domain(options)
         moves = self.env["account.move"].search(
@@ -265,9 +342,11 @@ class BillingReport(models.AbstractModel):
                     "partner_id": key,
                     "partner_name": line["partner_name"],
                     "amount_total": 0.0,
+                    "amount_paid": 0.0,
                     "amount_pending": 0.0,
                 }
             by_partner[key]["amount_total"] += line["amount_total"]
+            by_partner[key]["amount_paid"] += line["amount_paid"]
             by_partner[key]["amount_pending"] += line["amount_residual"]
 
         top_customers = sorted(
@@ -276,26 +355,68 @@ class BillingReport(models.AbstractModel):
             reverse=True,
         )[:10]
 
-        # Daily trend series — feeds the Chart.js visualization on the
-        # dashboard. Aggregated server-side to keep the OWL renderer
-        # cheap and to keep the same numbers across PDF/XLSX/dashboard.
-        by_day = {}
+        # Trend series — aggregates the dataset on the requested
+        # granularity (day / week / month). 'auto' picks based on the
+        # span: <=31 days → day, <=120 days → week, else month.
+        trend, granularity = self._build_trend(options, lines)
+        options["trend_granularity"] = granularity
+
+        # Filter-aware breakdowns shown in the PDF/Excel summary panel.
+        # We always emit the same keys so the template can iterate
+        # without conditionals.
+        by_status = {"paid": 0.0, "pending": 0.0}
+        by_status_count = {"paid": 0, "pending": 0}
         for line in lines:
-            day = line["invoice_date"]
-            if not day:
-                continue
-            bucket = by_day.setdefault(day, {
-                "invoiced": 0.0,
-                "paid": 0.0,
-                "pending": 0.0,
+            by_status[line["payment_state"]] = (
+                by_status.get(line["payment_state"], 0.0) + line["amount_total"]
+            )
+            by_status_count[line["payment_state"]] = (
+                by_status_count.get(line["payment_state"], 0) + 1
+            )
+
+        by_doc_type = {}
+        for move in moves:
+            doc_type = ""
+            if "l10n_latam_document_type_id" in move._fields and move.l10n_latam_document_type_id:
+                doc_type = move.l10n_latam_document_type_id.display_name or ""
+            if not doc_type:
+                doc_type = _("Refund") if move.move_type == "out_refund" else _("Invoice")
+            entry = by_doc_type.setdefault(doc_type, {
+                "name": doc_type, "count": 0, "amount_total": 0.0,
             })
-            bucket["invoiced"] += line["amount_total"]
-            bucket["paid"] += line["amount_paid"]
-            bucket["pending"] += line["amount_residual"]
-        trend = [
-            {"date": day, **values}
-            for day, values in sorted(by_day.items())
-        ]
+            entry["count"] += 1
+            entry["amount_total"] += move.amount_total
+        breakdown_doc_type = sorted(
+            by_doc_type.values(), key=lambda d: d["amount_total"], reverse=True,
+        )
+
+        # Collection-health snapshot. Compares amount paid vs total
+        # invoiced (and count of paid vs total invoices). Status is a
+        # traffic-light bucket consumed by the dashboard gauge:
+        #   >= 75% paid → good     (green)
+        #   >= 50% paid → normal   (yellow)
+        #   <  50% paid → bad      (red)
+        total_inv = totals["total_invoiced"] or 0.0
+        total_paid_amt = totals["total_paid"] or 0.0
+        ratio = (total_paid_amt / total_inv) if total_inv else 0.0
+        if ratio >= 0.75:
+            health_status, health_label = "good", _("Healthy")
+        elif ratio >= 0.50:
+            health_status, health_label = "normal", _("At Risk")
+        else:
+            health_status, health_label = "bad", _("Critical")
+        paid_count = sum(1 for line in lines if line["payment_state"] == "paid")
+        pending_count = sum(1 for line in lines if line["payment_state"] == "pending")
+        health = {
+            "status": health_status,
+            "label": health_label,
+            "ratio": ratio,
+            "paid_amount": total_paid_amt,
+            "pending_amount": totals["total_pending"] or 0.0,
+            "paid_count": paid_count,
+            "pending_count": pending_count,
+            "total_count": totals["count"],
+        }
 
         company = self.env.company
         return {
@@ -304,6 +425,18 @@ class BillingReport(models.AbstractModel):
             "totals": totals,
             "top_customers": top_customers,
             "trend": trend,
+            "health": health,
+            "breakdown_status": {
+                "paid": {
+                    "amount_total": by_status.get("paid", 0.0),
+                    "count": by_status_count.get("paid", 0),
+                },
+                "pending": {
+                    "amount_total": by_status.get("pending", 0.0),
+                    "count": by_status_count.get("pending", 0),
+                },
+            },
+            "breakdown_doc_type": breakdown_doc_type,
             "company": {
                 "id": company.id,
                 "name": company.name,
