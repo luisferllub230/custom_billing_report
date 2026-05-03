@@ -1,25 +1,14 @@
-# -*- coding: utf-8 -*-
-"""HTTP endpoints for the Billing Report module.
-
-Currently exposes a single route, ``/custom_billing_report/xlsx``,
-that streams the Excel export. Re-using a controller (instead of a
-``report_xlsx``-style binding) avoids depending on OCA modules and
-keeps the export self-contained: ``xlsxwriter`` ships with Odoo's
-Python requirements.
-"""
-
 import io
 import json
 
 import xlsxwriter
 
-from odoo import http
+from odoo import _, http
+from odoo.exceptions import AccessError
 from odoo.http import content_disposition, request
 
 
 class BillingReportController(http.Controller):
-    """Public-but-authenticated routes for the Billing Report."""
-
     @http.route(
         "/custom_billing_report/xlsx",
         type="http",
@@ -33,6 +22,9 @@ class BillingReportController(http.Controller):
             :meth:`billing.report.wizard._get_options`). When omitted
             the report uses the service defaults.
         """
+        if not request.env.user.has_group("account.group_account_manager"):
+            raise AccessError(_("You are not allowed to access the Billing Report."))
+
         try:
             parsed_options = json.loads(options) if options else {}
         except (TypeError, ValueError):
@@ -41,7 +33,7 @@ class BillingReportController(http.Controller):
         billing_service = request.env["billing.report"].sudo(False)
         data = billing_service.get_report_data(parsed_options)
 
-        xlsx_bytes = self._build_xlsx(data)
+        xlsx_bytes = self._build_xlsx(data, env=request.env)
         filename = "billing_report_%s_%s.xlsx" % (
             data["options"].get("date_from") or "",
             data["options"].get("date_to") or "",
@@ -59,8 +51,18 @@ class BillingReportController(http.Controller):
     # Workbook builder
     # ------------------------------------------------------------------
 
-    def _build_xlsx(self, data):
-        """Return the raw bytes of the XLSX file for ``data``."""
+    def _build_xlsx(self, data, env=None):
+        """Return the raw bytes of the XLSX file for ``data``.
+
+        We bind a ``context`` local with the user's language so
+        :func:`odoo.tools.translate._` can resolve translations by
+        inspecting this frame (it looks at ``frame.f_locals['context']``
+        before anything else). Without this bridge, ``_()`` would
+        fall back to the source string.
+        """
+        if env is None:
+            env = request.env if request else None
+        context = {"lang": (env.lang if env else None) or "en_US"}
         buffer = io.BytesIO()
         workbook = xlsxwriter.Workbook(buffer, {"in_memory": True})
 
@@ -97,7 +99,7 @@ class BillingReportController(http.Controller):
         })
 
         # ---- Sheet ---------------------------------------------------
-        sheet = workbook.add_worksheet("Billing Report")
+        sheet = workbook.add_worksheet(_("Billing Report"))
         sheet.set_column("A:A", 12)  # Date
         sheet.set_column("B:B", 18)  # Invoice
         sheet.set_column("C:C", 35)  # Customer
@@ -107,25 +109,31 @@ class BillingReportController(http.Controller):
         sheet.set_column("J:J", 16)  # Status
 
         # Title row
-        sheet.merge_range("A1:J1", "Billing Report", title_fmt)
+        sheet.merge_range("A1:J1", _("Billing Report"), title_fmt)
 
         opts = data["options"]
-        meta_line = "Period: %s -> %s   |   Status: %s" % (
-            opts.get("date_from") or "",
-            opts.get("date_to") or "",
-            opts.get("payment_state") or "all",
+        status_map = {
+            "all": _("All"),
+            "paid": _("Paid"),
+            "unpaid": _("Pending Payment"),
+        }
+        meta_line = _(
+            "Period: %(date_from)s -> %(date_to)s   |   Status: %(status)s",
+            date_from=opts.get("date_from") or "",
+            date_to=opts.get("date_to") or "",
+            status=status_map.get(opts.get("payment_state") or "all", ""),
         )
         sheet.merge_range("A2:J2", meta_line, meta_fmt)
 
         # KPI block (rows 4-5)
         totals = data["totals"]
         kpi_pairs = [
-            ("Invoices", totals["count"]),
-            ("Total Invoiced", totals["total_invoiced"]),
-            ("Total Paid", totals["total_paid"]),
-            ("Total Pending", totals["total_pending"]),
-            ("Total Tax", totals["total_tax"]),
-            ("Total Discount", totals["total_discount"]),
+            (_("Invoices"), totals["count"]),
+            (_("Total Invoiced"), totals["total_invoiced"]),
+            (_("Total Paid"), totals["total_paid"]),
+            (_("Total Pending"), totals["total_pending"]),
+            (_("Total Tax"), totals["total_tax"]),
+            (_("Total Discount"), totals["total_discount"]),
         ]
         for idx, (label, value) in enumerate(kpi_pairs):
             sheet.write(3, idx, label, kpi_label_fmt)
@@ -133,9 +141,9 @@ class BillingReportController(http.Controller):
 
         # Detail header (row 7 — index 6)
         headers = [
-            "Date", "Invoice", "Customer", "NCF",
-            "Subtotal", "Discount", "Tax (ITBIS)", "Total",
-            "Payment Method", "Status",
+            _("Date"), _("Invoice"), _("Customer"), _("NCF"),
+            _("Subtotal"), _("Discount"), _("Tax (ITBIS)"), _("Total"),
+            _("Payment Method"), _("Status"),
         ]
         header_row = 6
         for col, label in enumerate(headers):
@@ -160,7 +168,7 @@ class BillingReportController(http.Controller):
             row += 1
 
         # Totals row
-        sheet.merge_range(row, 0, row, 3, "Totals", total_label_fmt)
+        sheet.merge_range(row, 0, row, 3, _("Totals"), total_label_fmt)
         sheet.write_number(row, 4, totals["total_untaxed"], total_value_fmt)
         sheet.write_number(row, 5, totals["total_discount"], total_value_fmt)
         sheet.write_number(row, 6, totals["total_tax"], total_value_fmt)

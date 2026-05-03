@@ -7,10 +7,34 @@
  * through a variable is overridden in the [data-bs-theme="dark"] block.
  */
 
+// .o_billing_dashboard is applied by Layout to its .o_content wrapper.
+// We turn it into a flex column so the filter bar stays pinned at the
+// top and the body section ("o_billing_body") becomes the only
+// vertical scroll container — that's what makes long invoice lists
+// reachable down to the last row.
 .o_billing_dashboard {
     background-color: var(--bs-body-bg);
     color: var(--bs-body-color);
-    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+
+    // The body wrapper holds KPIs, chart, table and top customers.
+    // It owns the scroll; min-height: 0 is the classic flex hack that
+    // prevents the inner content from forcing the parent to grow.
+    .o_billing_body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 1rem;
+        padding-bottom: 2rem;
+    }
+
+    // Filter bar / chips stay above the scroll.
+    > .o_billing_filterbar {
+        flex: 0 0 auto;
+    }
 
     // KPI accent palette as CSS variables — overridable per theme.
     --o-billing-accent-invoiced: #1F4E78;
@@ -239,10 +263,64 @@
         color: var(--bs-body-color);
         border-color: var(--bs-border-color);
     }
+
+    // ----------------------------------------------------------------
+    // Collection Health gauge — traffic-light card with doughnut.
+    // Colour is driven by the .o_billing_health_<status> modifier
+    // class (good / normal / bad) emitted by the OWL component.
+    // ----------------------------------------------------------------
+
+    .o_billing_health {
+        .o_billing_health_chart_wrapper {
+            position: relative;
+            width: 140px;
+            height: 140px;
+
+            canvas {
+                max-width: 100%;
+                max-height: 100%;
+            }
+        }
+
+        .o_billing_health_badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            border: 1px solid currentColor;
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .o_billing_health_ratio .display-6 {
+            font-size: 2rem;
+            line-height: 1;
+        }
+
+        &.o_billing_health_good {
+            .o_billing_health_badge { color: var(--o-billing-accent-paid); }
+            .o_billing_health_icon::before { content: "\f164"; } // thumbs-up
+            .o_billing_health_ratio .display-6 { color: var(--o-billing-accent-paid); }
+        }
+        &.o_billing_health_normal {
+            .o_billing_health_badge { color: var(--o-billing-accent-pending); }
+            .o_billing_health_icon::before { content: "\f071"; } // exclamation-triangle
+            .o_billing_health_ratio .display-6 { color: var(--o-billing-accent-pending); }
+        }
+        &.o_billing_health_bad {
+            .o_billing_health_badge { color: #dc3545; }
+            .o_billing_health_icon::before { content: "\f00d"; } // times
+            .o_billing_health_ratio .display-6 { color: #dc3545; }
+        }
+        &.o_billing_health_neutral {
+            .o_billing_health_badge { color: var(--bs-secondary-color); }
+            .o_billing_health_icon::before { content: "\f128"; } // question
+        }
+    }
 }
 
 /*
- * Dark mode tuning. Odoo 19 toggles data-bs-theme="dark" on <html> when
+ * Dark mode tuning. Odoo 18 toggles data-bs-theme="dark" on <html> when
  * the user picks the dark preference; everything below is scoped to it.
  */
 [data-bs-theme="dark"] .o_billing_dashboard {

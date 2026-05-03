@@ -1,0 +1,534 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* custom_billing_report
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-02 00:00+0000\n"
+"PO-Revision-Date: 2026-05-02 00:00+0000\n"
+"Last-Translator: Luis Fernandez <luisferllub230@gmail.com>\n"
+"Language-Team: Spanish (Dominican Republic) <es_DO@li.org>\n"
+"Language: es_DO\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: custom_billing_report
+#: model:ir.model,name:custom_billing_report.model_billing_report
+msgid "Billing Report Service"
+msgstr "Servicio de Reporte de Facturacion"
+
+#. module: custom_billing_report
+#: model:ir.model,name:custom_billing_report.model_billing_report_wizard
+msgid "Billing Report Wizard"
+msgstr "Asistente de Reporte de Facturacion"
+
+#. module: custom_billing_report
+#: model:ir.actions.client,name:custom_billing_report.action_billing_dashboard
+#: model:ir.ui.menu,name:custom_billing_report.menu_billing_dashboard_in_accounting
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Billing Dashboard"
+msgstr "Panel de Facturacion"
+
+#. module: custom_billing_report
+#: model:ir.actions.act_window,name:custom_billing_report.action_billing_report_wizard
+#: model:ir.actions.report,name:custom_billing_report.action_report_billing
+#: model:ir.ui.menu,name:custom_billing_report.menu_billing_report_root
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Billing Report"
+msgstr "Reporte de Facturacion"
+
+#. module: custom_billing_report
+#: model:ir.ui.menu,name:custom_billing_report.menu_billing_dashboard
+msgid "Dashboard"
+msgstr "Panel"
+
+#. module: custom_billing_report
+#: model:ir.ui.menu,name:custom_billing_report.menu_billing_report_wizard
+msgid "Generate Report"
+msgstr "Generar Reporte"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__date_range__today
+msgid "Today"
+msgstr "Hoy"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__date_range__yesterday
+msgid "Yesterday"
+msgstr "Ayer"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__date_range__this_week
+msgid "This Week"
+msgstr "Esta Semana"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__date_range__this_month
+msgid "This Month"
+msgstr "Este Mes"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__date_range__last_month
+msgid "Last Month"
+msgstr "Mes Pasado"
+
+#. module: custom_billing_report
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__date_range__custom
+msgid "Custom"
+msgstr "Personalizado"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__date_range
+msgid "Date Range"
+msgstr "Rango de Fechas"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__date_from
+msgid "From"
+msgstr "Desde"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__date_to
+msgid "To"
+msgstr "Hasta"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__partner_ids
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Customers"
+msgstr "Clientes"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Customer"
+msgstr "Cliente"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,help:custom_billing_report.field_billing_report_wizard__partner_ids
+msgid "Leave empty to include every customer."
+msgstr "Dejar vacio para incluir todos los clientes."
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__payment_state
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Status"
+msgstr "Estado"
+
+#. module: custom_billing_report
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__payment_state__all
+msgid "All"
+msgstr "Todos"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: code:addons/custom_billing_report/static/src/js/billing_trend_chart.js:0
+#: model:ir.model.fields.selection,name:custom_billing_report.selection__billing_report_wizard__payment_state__paid
+msgid "Paid"
+msgstr "Pagado"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+msgid "Pending Payment"
+msgstr "Pago Pendiente"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: code:addons/custom_billing_report/static/src/js/billing_trend_chart.js:0
+msgid "Pending"
+msgstr "Pendiente"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__payment_method_ids
+msgid "Payment Methods"
+msgstr "Metodos de Pago"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Payment Method"
+msgstr "Metodo de Pago"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,help:custom_billing_report.field_billing_report_wizard__payment_method_ids
+msgid "Leave empty to include every payment method."
+msgstr "Dejar vacio para incluir todos los metodos de pago."
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__company_ids
+msgid "Companies"
+msgstr "Companias"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,field_description:custom_billing_report.field_billing_report_wizard__l10n_latam_document_type_ids
+msgid "NCF Types"
+msgstr "Tipos de NCF"
+
+#. module: custom_billing_report
+#: model:ir.model.fields,help:custom_billing_report.field_billing_report_wizard__l10n_latam_document_type_ids
+msgid ""
+"Filter by Dominican Republic NCF type. Only available when "
+"l10n_latam_invoice_document is installed."
+msgstr ""
+"Filtrar por tipo de NCF de Republica Dominicana. Solo disponible cuando "
+"l10n_latam_invoice_document esta instalado."
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/wizard/billing_report_wizard.py:0
+msgid "'From' date cannot be later than 'To' date."
+msgstr "La fecha 'Desde' no puede ser posterior a la fecha 'Hasta'."
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Open Dashboard"
+msgstr "Abrir Panel"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Print PDF"
+msgstr "Imprimir PDF"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Download Excel"
+msgstr "Descargar Excel"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Cancel"
+msgstr "Cancelar"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Filters"
+msgstr "Filtros"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Refresh"
+msgstr "Actualizar"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Export"
+msgstr "Exportar"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "PDF"
+msgstr "PDF"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Excel"
+msgstr "Excel"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Quick Range"
+msgstr "Rango Rapido"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Apply"
+msgstr "Aplicar"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Active filters:"
+msgstr "Filtros activos:"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Date: %s → %s"
+msgstr "Fecha: %s → %s"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Status: %s"
+msgstr "Estado: %s"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Could not load billing data: %s"
+msgstr "No se pudieron cargar los datos de facturacion: %s"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.view_billing_report_wizard_form
+msgid "Invoices"
+msgstr "Facturas"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Invoice"
+msgstr "Factura"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Date"
+msgstr "Fecha"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "NCF"
+msgstr "NCF"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Subtotal"
+msgstr "Subtotal"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Discount"
+msgstr "Descuento"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Tax (ITBIS)"
+msgstr "Impuesto (ITBIS)"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Total"
+msgstr "Total"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_trend_chart.js:0
+msgid "Invoiced"
+msgstr "Facturado"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Total Invoiced"
+msgstr "Total Facturado"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Total Paid"
+msgstr "Total Pagado"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Total Pending"
+msgstr "Total Pendiente"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Total Tax"
+msgstr "Total Impuesto"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Total Discount"
+msgstr "Total Descuento"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Daily Trend"
+msgstr "Tendencia Diaria"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Top Customers"
+msgstr "Mejores Clientes"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Totals"
+msgstr "Totales"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "No invoices match the selected filters."
+msgstr "Ninguna factura coincide con los filtros seleccionados."
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Try widening the date range or clearing filters."
+msgstr "Intente ampliar el rango de fechas o limpiar los filtros."
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Period:"
+msgstr "Periodo:"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Generated on"
+msgstr "Generado el"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Summary"
+msgstr "Resumen"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "By Status"
+msgstr "Por Estado"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "By Document Type"
+msgstr "Por Tipo de Documento"
+
+#. module: custom_billing_report
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Amount"
+msgstr "Monto"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+msgid "Refund"
+msgstr "Nota de Crédito"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+msgid "Healthy"
+msgstr "Saludable"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+msgid "At Risk"
+msgstr "En Riesgo"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+msgid "Critical"
+msgstr "Crítico"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_health_gauge.xml:0
+msgid "Collection Health"
+msgstr "Salud de Cobros"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_health_gauge.xml:0
+msgid "collected"
+msgstr "cobrado"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_health_gauge.xml:0
+msgid "Paid invoices"
+msgstr "Facturas pagadas"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_health_gauge.xml:0
+msgid "Paid amount"
+msgstr "Monto pagado"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_health_gauge.xml:0
+msgid "Pending amount"
+msgstr "Monto pendiente"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Trend"
+msgstr "Tendencia"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Auto"
+msgstr "Auto"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Day"
+msgstr "Día"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Week"
+msgstr "Semana"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Month"
+msgstr "Mes"
+

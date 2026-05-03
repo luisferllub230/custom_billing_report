@@ -1,0 +1,243 @@
+from datetime import date
+
+from odoo.addons.account.tests.common import AccountTestInvoicingCommon
+from odoo.tests import tagged
+
+
+@tagged("post_install", "-at_install", "custom_billing_report")
+class TestBillingReport(AccountTestInvoicingCommon):
+    # AccountTestInvoicingCommon sets up CoA + journals so
+    # account.payment.register can post payments and flip the move
+    # to payment_state='paid' (TransactionCase alone is not enough).
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.service = cls.env["billing.report"]
+        cls.company = cls.env.company
+
+        cls.partner_a = cls.env["res.partner"].create({
+            "name": "Customer Alpha",
+            "company_type": "company",
+        })
+        cls.partner_b = cls.env["res.partner"].create({
+            "name": "Customer Bravo",
+            "company_type": "company",
+        })
+
+        cls.product = cls.env["product.product"].create({
+            "name": "Test Product",
+            "type": "service",
+            "lst_price": 1000.0,
+        })
+
+        # ITBIS-named sale tax (18%) — the service detects taxes whose
+        # name contains "ITBIS" (case-insensitive).
+        cls.tax_itbis = cls.env["account.tax"].create({
+            "name": "ITBIS 18%",
+            "amount": 18.0,
+            "type_tax_use": "sale",
+            "amount_type": "percent",
+            "company_id": cls.company.id,
+        })
+
+        cls.move_paid = cls._create_invoice(
+            cls, cls.partner_a, date(2026, 1, 10), price=1000.0,
+            discount=0.0, register_payment=True,
+        )
+        cls.move_unpaid = cls._create_invoice(
+            cls, cls.partner_b, date(2026, 1, 20), price=500.0,
+            discount=10.0, register_payment=False,
+        )
+        cls.move_outside = cls._create_invoice(
+            cls, cls.partner_a, date(2025, 12, 5), price=200.0,
+            discount=0.0, register_payment=False,
+        )
+
+    def _create_invoice(self, partner, invoice_date, price,
+                        discount=0.0, register_payment=False):
+        """Helper to post a customer invoice and optionally pay it."""
+        move = self.env["account.move"].create({
+            "move_type": "out_invoice",
+            "partner_id": partner.id,
+            "invoice_date": invoice_date,
+            "invoice_line_ids": [(0, 0, {
+                "product_id": self.product.id,
+                "name": self.product.name,
+                "quantity": 1,
+                "price_unit": price,
+                "discount": discount,
+                "tax_ids": [(6, 0, self.tax_itbis.ids)],
+            })],
+        })
+        move.action_post()
+        if register_payment:
+            self.env["account.payment.register"].with_context(
+                active_model="account.move",
+                active_ids=move.ids,
+            ).create({}).action_create_payments()
+        return move
+
+    # ------------------------------------------------------------------
+    # Options helpers
+    # ------------------------------------------------------------------
+
+    def test_default_options_shape(self):
+        opts = self.service._default_options()
+        self.assertIn("date_from", opts)
+        self.assertIn("date_to", opts)
+        self.assertEqual(opts["payment_state"], "all")
+        self.assertEqual(opts["partner_ids"], [])
+        self.assertIn(self.company.id, opts["company_ids"])
+
+    def test_normalize_options_merges_over_defaults(self):
+        merged = self.service._normalize_options({"payment_state": "paid"})
+        self.assertEqual(merged["payment_state"], "paid")
+        # Untouched keys keep their defaults.
+        self.assertEqual(merged["partner_ids"], [])
+
+    def test_normalize_options_handles_none(self):
+        merged = self.service._normalize_options(None)
+        self.assertEqual(merged["payment_state"], "all")
+
+    # ------------------------------------------------------------------
+    # Domain
+    # ------------------------------------------------------------------
+
+    def test_domain_filters_by_date(self):
+        opts = self.service._normalize_options({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+        })
+        domain = self.service._get_invoice_domain(opts)
+        moves = self.env["account.move"].search(domain)
+        self.assertIn(self.move_paid, moves)
+        self.assertIn(self.move_unpaid, moves)
+        self.assertNotIn(self.move_outside, moves)
+
+    def test_domain_filters_by_partner(self):
+        opts = self.service._normalize_options({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "partner_ids": [self.partner_a.id],
+        })
+        domain = self.service._get_invoice_domain(opts)
+        moves = self.env["account.move"].search(domain)
+        self.assertEqual(moves, self.move_paid)
+
+    def test_domain_filters_by_payment_state_paid(self):
+        opts = self.service._normalize_options({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "payment_state": "paid",
+        })
+        domain = self.service._get_invoice_domain(opts)
+        moves = self.env["account.move"].search(domain)
+        self.assertIn(self.move_paid, moves)
+        self.assertNotIn(self.move_unpaid, moves)
+
+    def test_domain_filters_by_payment_state_unpaid(self):
+        opts = self.service._normalize_options({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "payment_state": "unpaid",
+        })
+        domain = self.service._get_invoice_domain(opts)
+        moves = self.env["account.move"].search(domain)
+        self.assertIn(self.move_unpaid, moves)
+        self.assertNotIn(self.move_paid, moves)
+
+    # ------------------------------------------------------------------
+    # Per-row builders
+    # ------------------------------------------------------------------
+
+    def test_get_ncf_falls_back_to_empty(self):
+        # Without LATAM document number, _get_ncf returns "".
+        ncf = self.service._get_ncf(self.move_paid)
+        self.assertIsInstance(ncf, str)
+
+    def test_discount_amount_zero(self):
+        self.assertEqual(self.service._get_discount_amount(self.move_paid), 0.0)
+
+    def test_discount_amount_ten_percent(self):
+        # 500 * 10% = 50.0
+        self.assertAlmostEqual(
+            self.service._get_discount_amount(self.move_unpaid), 50.0, places=2
+        )
+
+    def test_itbis_amount_matches_amount_tax(self):
+        # Single ITBIS tax — service's ITBIS detection should equal
+        # ``amount_tax`` for a one-tax invoice.
+        amount = self.service._get_itbis_amount(self.move_paid)
+        self.assertAlmostEqual(amount, self.move_paid.amount_tax, places=2)
+
+    def test_status_paid(self):
+        code, _label = self.service._get_status(self.move_paid)
+        self.assertEqual(code, "paid")
+
+    def test_status_pending(self):
+        code, _label = self.service._get_status(self.move_unpaid)
+        self.assertEqual(code, "pending")
+
+    def test_build_line_keys(self):
+        line = self.service._build_line(self.move_paid)
+        expected_keys = {
+            "id", "invoice_date", "name", "partner_id", "partner_name",
+            "ncf", "amount_untaxed", "discount", "amount_tax",
+            "amount_total", "amount_residual", "amount_paid",
+            "payment_method", "payment_state", "status_label",
+            "currency_id", "currency_symbol",
+        }
+        self.assertTrue(expected_keys.issubset(line.keys()))
+
+    # ------------------------------------------------------------------
+    # Aggregate payload
+    # ------------------------------------------------------------------
+
+    def test_get_report_data_totals(self):
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "company_ids": [self.company.id],
+        })
+        totals = data["totals"]
+        self.assertEqual(totals["count"], 2)
+        # paid invoice: 1000 + 18% tax = 1180; unpaid: 500 - 50 disc = 450
+        # + 18% on (500 - 50) = 81 => 531; total invoiced = 1180 + 531 = 1711
+        self.assertAlmostEqual(totals["total_invoiced"], 1711.0, places=2)
+        self.assertAlmostEqual(totals["total_paid"], 1180.0, places=2)
+        self.assertAlmostEqual(totals["total_pending"], 531.0, places=2)
+        self.assertAlmostEqual(totals["total_discount"], 50.0, places=2)
+
+    def test_get_report_data_top_customers(self):
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "company_ids": [self.company.id],
+        })
+        ids = {c["partner_id"] for c in data["top_customers"]}
+        self.assertEqual(ids, {self.partner_a.id, self.partner_b.id})
+
+    def test_get_report_data_trend_daily_buckets(self):
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "company_ids": [self.company.id],
+        })
+        days = [point["date"] for point in data["trend"]]
+        self.assertIn("2026-01-10", days)
+        self.assertIn("2026-01-20", days)
+
+    def test_get_report_data_company_payload(self):
+        data = self.service.get_report_data({})
+        self.assertEqual(data["company"]["id"], self.company.id)
+        self.assertTrue(data["company"]["currency_symbol"])
+
+    def test_get_report_data_serialisable(self):
+        import json
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+        })
+        # Must round-trip through JSON for dashboard RPC.
+        json.dumps(data)
