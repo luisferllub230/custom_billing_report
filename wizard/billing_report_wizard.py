@@ -55,6 +55,7 @@ class BillingReportWizard(models.TransientModel):
         column1="wizard_id",
         column2="partner_id",
         string="Customers",
+        domain="[('customer_rank', '>', 0)]",
         help="Leave empty to include every customer.",
     )
     payment_state = fields.Selection(
@@ -73,7 +74,9 @@ class BillingReportWizard(models.TransientModel):
         column1="wizard_id",
         column2="method_id",
         string="Payment Methods",
-        help="Leave empty to include every payment method.",
+        domain="[('payment_type', '=', 'inbound')]",
+        help="Leave empty to include every payment method. "
+             "Only inbound (customer) payment methods are listed.",
     )
     company_ids = fields.Many2many(
         comodel_name="res.company",
@@ -178,12 +181,18 @@ class BillingReportWizard(models.TransientModel):
         }
 
     def action_print_pdf(self):
-        """Render the QWeb PDF report with the wizard filters."""
+        """Render the QWeb PDF report with the wizard filters.
+
+        ``config=False`` is passed so :meth:`ir.actions.report.report_action`
+        returns the report action directly instead of wrapping it in the
+        company-logo configuration wizard the first time the user prints
+        a report on a fresh database.
+        """
         self.ensure_one()
         data = {"options": self._get_options()}
         return self.env.ref(
             "custom_billing_report.action_report_billing"
-        ).report_action(self, data=data)
+        ).report_action(self, data=data, config=False)
 
     def action_print_xlsx(self):
         """Download the Excel export with the wizard filters."""

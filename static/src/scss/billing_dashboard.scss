@@ -28,7 +28,17 @@
         min-height: 0;
         overflow-y: auto;
         padding: 1rem;
-        padding-bottom: 2rem;
+        padding-bottom: 6rem;
+    }
+
+    // Charts wrapper — constrains width on very wide monitors so the
+    // visualisations stay legible. Below xxl we let it span freely.
+    .o_billing_charts_wrap {
+        max-width: 1280px;
+
+        .o_billing_chart_wrapper {
+            height: 280px;
+        }
     }
 
     // Filter bar / chips stay above the scroll.
