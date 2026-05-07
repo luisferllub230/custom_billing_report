@@ -229,8 +229,43 @@ class BillingReport(models.AbstractModel):
         return -itbis if move.move_type == "out_refund" else itbis
 
     @api.model
+    def _pos_installed(self):
+        """Soft check — ``True`` when ``point_of_sale`` is installed.
+
+        The module does not declare POS as a dependency: every POS code
+        path is gated by this check so the report keeps working on
+        installs without POS.
+        """
+        return "pos.order" in self.env
+
+    @api.model
+    def _move_pos_orders(self, move):
+        """Return the POS orders linked to ``move`` (empty when POS off).
+
+        Uses ``sudo()`` because the report is gated by
+        ``account.group_account_manager`` and accountants typically
+        lack POS read access — without elevation, the o2m read raises
+        ``AccessError`` on installs with ``point_of_sale``.
+        """
+        if not self._pos_installed():
+            return None
+        if "pos_order_ids" not in move._fields:
+            return None
+        return move.sudo().pos_order_ids
+
+    @api.model
     def _get_payment_method_label(self, move):
-        """Comma-separated list of payment-method names on ``move``."""
+        """Comma-separated list of payment-method names on ``move``.
+
+        When the move was generated from a POS order we read names from
+        ``pos.payment`` instead — POS does not always create reconciled
+        ``account.payment`` records, so ``matched_payment_ids`` would
+        miss the cashier's collection.
+        """
+        pos_orders = self._move_pos_orders(move)
+        if pos_orders:
+            names = pos_orders.payment_ids.mapped("payment_method_id.name")
+            return ", ".join(n for n in names if n)
         if "matched_payment_ids" not in move._fields:
             return ""
         payments = move.matched_payment_ids
@@ -277,6 +312,38 @@ class BillingReport(models.AbstractModel):
         return "other"
 
     @api.model
+    def _classify_pos_payment(self, pos_payment):
+        """Same buckets as :meth:`_classify_payment` but for ``pos.payment``.
+
+        ``pos.payment`` carries a ``payment_method_id`` (``pos.payment.method``)
+        instead of an ``account.payment.method.line``. Resolution order
+        mirrors the ``account.payment`` classifier:
+
+        1. ``method.is_cash_count`` (cash POS method) → *cash*.
+        2. Keyword scan on method name + journal name/code.
+        3. ``journal.type == 'bank'`` → *bank*.
+        4. Fallback → *other*.
+        """
+        method = pos_payment.payment_method_id
+        journal = method.journal_id if method else None
+        if method and method.is_cash_count:
+            return "cash"
+        haystack_parts = []
+        if method:
+            haystack_parts.append((method.name or "").lower())
+        if journal:
+            haystack_parts.append((journal.name or "").lower())
+            haystack_parts.append((journal.code or "").lower())
+        haystack = " ".join(p for p in haystack_parts if p)
+        if haystack:
+            for category, keywords in PAYMENT_CATEGORY_KEYWORDS.items():
+                if any(kw in haystack for kw in keywords):
+                    return category
+        if journal and journal.type == "bank":
+            return "bank"
+        return "other"
+
+    @api.model
     def _empty_payment_breakdown(self):
         """Return a fresh ``{category: 0.0}`` dict in canonical order."""
         return {cat: 0.0 for cat in PAYMENT_CATEGORIES}
@@ -288,11 +355,22 @@ class BillingReport(models.AbstractModel):
         Refunds are signed negative so they reduce the cash-up total
         for the corresponding bucket — which is what the daily arqueo
         expects (a returned card sale shrinks the *card* total).
+
+        Moves issued from POS read their breakdown from the linked
+        ``pos.payment`` records instead: POS sessions reconcile through
+        statement lines and may not produce ``account.payment`` rows,
+        so ``matched_payment_ids`` would under-report cash collections.
         """
         breakdown = self._empty_payment_breakdown()
+        sign = -1 if move.move_type == "out_refund" else 1
+        pos_orders = self._move_pos_orders(move)
+        if pos_orders:
+            for payment in pos_orders.payment_ids:
+                category = self._classify_pos_payment(payment)
+                breakdown[category] += sign * (payment.amount or 0.0)
+            return breakdown
         if "matched_payment_ids" not in move._fields:
             return breakdown
-        sign = -1 if move.move_type == "out_refund" else 1
         for payment in move.matched_payment_ids:
             category = self._classify_payment(payment)
             breakdown[category] += sign * (payment.amount or 0.0)
@@ -348,6 +426,125 @@ class BillingReport(models.AbstractModel):
             ("bank", _("Bank")),
             ("other", _("Other")),
         ]
+
+    # ------------------------------------------------------------------
+    # POS — soft-optional source
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _get_pos_order_domain(self, options):
+        """Return the search domain on ``pos.order`` for ``options``.
+
+        ``date_order`` is a ``Datetime``; we extend ``date_to`` to the
+        end of the day so a "today" preset still includes orders booked
+        in the afternoon.
+        """
+        domain = [("state", "in", ("paid", "done", "invoiced"))]
+        if options.get("date_from"):
+            domain.append(("date_order", ">=", options["date_from"]))
+        if options.get("date_to"):
+            domain.append(("date_order", "<=", "%s 23:59:59" % options["date_to"]))
+        if options.get("partner_ids"):
+            domain.append(("partner_id", "in", options["partner_ids"]))
+        if options.get("company_ids"):
+            domain.append(("company_id", "in", options["company_ids"]))
+        # ``pos.order.user_id`` is the cashier — we treat it as both
+        # salesperson and creator since POS does not split the two.
+        if options.get("create_user_ids"):
+            domain.append(("user_id", "in", options["create_user_ids"]))
+        return domain
+
+    @api.model
+    def _get_pos_ncf(self, order):
+        """Return the NCF for a POS order, when the DR localization is on."""
+        if "l10n_do_fiscal_number" in order._fields and order.l10n_do_fiscal_number:
+            return order.l10n_do_fiscal_number
+        if "l10n_latam_document_number" in order._fields and order.l10n_latam_document_number:
+            return order.l10n_latam_document_number
+        return ""
+
+    @api.model
+    def _build_pos_line(self, order):
+        """Render a non-invoiced POS order as a report row.
+
+        Invoiced POS orders are already represented by their
+        ``account.move``; we only emit a POS row for cash sales that
+        never produced an invoice, otherwise revenue would be double-
+        counted.
+        """
+        breakdown = self._empty_payment_breakdown()
+        for payment in order.payment_ids:
+            breakdown[self._classify_pos_payment(payment)] += payment.amount or 0.0
+        names = order.payment_ids.mapped("payment_method_id.name")
+        payment_label = ", ".join(n for n in names if n)
+        amount_paid = order.amount_paid or 0.0
+        amount_total = order.amount_total or 0.0
+        amount_residual = max(0.0, amount_total - amount_paid)
+        is_paid = abs(amount_residual) < 0.005
+        status_code = "paid" if is_paid else "pending"
+        status_label = _("Paid") if is_paid else _("Pending Payment")
+        invoice_date = ""
+        if order.date_order:
+            invoice_date = fields.Date.to_string(
+                fields.Datetime.context_timestamp(self, order.date_order).date()
+            )
+        partner = order.partner_id
+        cashier = order.user_id
+        return {
+            "id": order.id,
+            "source": "pos",
+            "invoice_date": invoice_date,
+            "name": order.name or "",
+            "partner_id": partner.id if partner else False,
+            "partner_name": partner.display_name if partner else _("POS Walk-in"),
+            "invoice_user_id": cashier.id if cashier else False,
+            "invoice_user_name": cashier.display_name if cashier else "",
+            "create_user_id": cashier.id if cashier else False,
+            "create_user_name": cashier.display_name if cashier else "",
+            "ncf": self._get_pos_ncf(order),
+            "amount_untaxed": amount_total - (order.amount_tax or 0.0),
+            "discount": 0.0,
+            "amount_tax": order.amount_tax or 0.0,
+            "amount_total": amount_total,
+            "amount_residual": amount_residual,
+            "amount_paid": amount_paid,
+            "payment_method": payment_label,
+            "payment_breakdown": breakdown,
+            "payment_state": status_code,
+            "status_label": status_label,
+            "currency_id": order.currency_id.id,
+            "currency_symbol": order.currency_id.symbol or order.currency_id.name,
+        }
+
+    @api.model
+    def _get_pos_lines(self, options):
+        """Return POS rows for orders that are NOT linked to an invoice.
+
+        Invoiced POS orders surface through the ``account.move`` flow
+        and we already redirect their payment breakdown to the linked
+        ``pos.payment`` records, so we exclude them here to avoid
+        double-counting revenue.
+        """
+        if not self._pos_installed():
+            return []
+        domain = self._get_pos_order_domain(options)
+        domain.append(("account_move", "=", False))
+        # ``sudo()`` — accountants running this report do not have POS
+        # access; elevation here keeps the soft-dep promise without
+        # forcing every accountant into the POS group.
+        orders = self.env["pos.order"].sudo().search(
+            domain, order="date_order asc, name asc"
+        )
+        payment_state = options.get("payment_state") or "all"
+        if payment_state == "unpaid":
+            orders = orders.filtered(
+                lambda o: (o.amount_total or 0.0) - (o.amount_paid or 0.0) > 0.005
+            )
+        elif payment_state == "paid":
+            orders = orders.filtered(
+                lambda o: abs((o.amount_total or 0.0) - (o.amount_paid or 0.0)) < 0.005
+            )
+        return [self._build_pos_line(o) for o in orders]
 
     # ------------------------------------------------------------------
     # Public API
@@ -427,6 +624,14 @@ class BillingReport(models.AbstractModel):
         )
 
         lines = [self._build_line(m) for m in moves]
+
+        # Soft POS source — non-invoiced orders only; invoiced POS
+        # orders already appear via ``moves`` and their breakdown is
+        # redirected to ``pos.payment`` in :meth:`_get_payment_breakdown`.
+        pos_lines = self._get_pos_lines(options)
+        if pos_lines:
+            lines.extend(pos_lines)
+            lines.sort(key=lambda l: (l.get("invoice_date") or "", l.get("name") or ""))
 
         totals = {
             "count": len(lines),
