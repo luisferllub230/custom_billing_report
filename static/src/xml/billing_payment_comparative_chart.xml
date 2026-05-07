@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="custom_billing_report.BillingPaymentComparativeChart">
+        <div class="row g-3">
+            <div class="col-lg-5 col-12">
+                <div class="o_billing_chart_wrapper o_billing_chart_wrapper_md">
+                    <canvas t-ref="donut"/>
+                </div>
+            </div>
+            <div class="col-lg-7 col-12">
+                <div class="o_billing_chart_wrapper o_billing_chart_wrapper_md">
+                    <canvas t-ref="bar"/>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

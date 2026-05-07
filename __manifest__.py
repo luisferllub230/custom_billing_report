@@ -1,6 +1,6 @@
 {
     "name": "Custom Billing Report",
-    "version": "18.0.1.1.0",
+    "version": "18.0.1.2.0",
     "category": "Accounting/Reporting",
     "summary": (
         "Detailed billing reports with interactive dashboard, "
@@ -31,6 +31,8 @@
             "custom_billing_report/static/src/js/billing_top_customers_chart.js",
             "custom_billing_report/static/src/js/billing_top_salespersons_chart.js",
             "custom_billing_report/static/src/js/billing_top_creators_chart.js",
+            "custom_billing_report/static/src/js/billing_payment_category_chart.js",
+            "custom_billing_report/static/src/js/billing_payment_comparative_chart.js",
             "custom_billing_report/static/src/js/billing_dashboard.js",
             "custom_billing_report/static/src/xml/billing_trend_chart.xml",
             "custom_billing_report/static/src/xml/billing_health_gauge.xml",
@@ -38,6 +40,8 @@
             "custom_billing_report/static/src/xml/billing_top_customers_chart.xml",
             "custom_billing_report/static/src/xml/billing_top_salespersons_chart.xml",
             "custom_billing_report/static/src/xml/billing_top_creators_chart.xml",
+            "custom_billing_report/static/src/xml/billing_payment_category_chart.xml",
+            "custom_billing_report/static/src/xml/billing_payment_comparative_chart.xml",
             "custom_billing_report/static/src/xml/billing_dashboard.xml",
         ],
     },

@@ -36,6 +36,22 @@ class TestBuildXlsx(TransactionCase):
         wb = load_workbook(io.BytesIO(payload), read_only=True)
         self.assertIn("Billing Report", wb.sheetnames)
 
+    def test_build_xlsx_with_payment_categories(self):
+        """Payment-category breakdown section must render without
+        raising even when categories carry zero amounts."""
+        data = self.env["billing.report"].get_report_data({})
+        data["payment_categories"] = [
+            {"key": "cash", "label": "Cash", "amount": 100.0},
+            {"key": "card", "label": "Card", "amount": 50.0},
+            {"key": "transfer", "label": "Transfer", "amount": 0.0},
+            {"key": "bank", "label": "Bank", "amount": 0.0},
+            {"key": "other", "label": "Other", "amount": 0.0},
+        ]
+        data["payment_total_collected"] = 150.0
+        payload = BillingReportController()._build_xlsx(data, env=self.env)
+        self.assertEqual(payload[:2], b"PK")
+        self.assertGreater(len(payload), 1000)
+
     def test_build_xlsx_with_user_breakdowns(self):
         """When there are aggregated rows the workbook still renders.
 

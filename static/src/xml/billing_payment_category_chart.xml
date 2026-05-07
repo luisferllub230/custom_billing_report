@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="custom_billing_report.BillingPaymentCategoryChart">
+        <div class="o_billing_payment_category">
+            <div class="d-flex align-items-baseline mb-2">
+                <span class="o_billing_payment_dot me-2"
+                      t-att-style="'background-color:' + props.color"/>
+                <span class="fw-bold"><t t-esc="props.label"/></span>
+                <span class="ms-auto fw-bold"><t t-esc="formatMoney(props.total or 0)"/></span>
+            </div>
+            <div class="o_billing_chart_wrapper o_billing_chart_wrapper_sm">
+                <canvas t-ref="canvas"/>
+            </div>
+        </div>
+    </t>
+
+</templates>

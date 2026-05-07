@@ -187,6 +187,73 @@
                     </div>
                 </div>
 
+                <!--
+                    Payment-type breakdown — cash-up panel.
+                    Renders a compact KPI row for each bucket plus a
+                    small per-bucket trend chart so the cashier can
+                    drill into each one in isolation, and a
+                    comparative chart that combines the four series.
+                -->
+                <div t-if="!state.loading" class="card mb-4 o_billing_payment_panel">
+                    <div class="card-header d-flex align-items-center flex-wrap gap-2">
+                        <i class="fa fa-money text-success me-2"/>
+                        <span class="fw-bold">Payment Breakdown — Daily Cash-up</span>
+                        <span class="ms-auto small text-muted">
+                            Total Collected:
+                            <span class="fw-bold ms-1">
+                                <t t-esc="formatMoney(state.data.payment_total_collected)"/>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-xl-3 col-md-6 col-12"
+                                 t-foreach="paymentCategoryConfig" t-as="cat" t-key="cat.key">
+                                <div class="o_billing_payment_kpi card h-100"
+                                     t-attf-style="--o-billing-payment-color: {{ cat.color }}">
+                                    <div class="card-body p-2">
+                                        <div class="d-flex align-items-center">
+                                            <div class="o_billing_kpi_icon">
+                                                <i t-attf-class="fa {{ cat.icon }}"/>
+                                            </div>
+                                            <div class="ms-2 flex-grow-1">
+                                                <div class="o_billing_kpi_label"><t t-esc="cat.label"/></div>
+                                                <div class="o_billing_kpi_value">
+                                                    <t t-esc="formatMoney(paymentTotal(cat.key))"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-xl-6 col-12"
+                                 t-foreach="paymentCategoryConfig" t-as="cat" t-key="cat.key">
+                                <BillingPaymentCategoryChart
+                                    category="cat.key"
+                                    label="cat.label"
+                                    color="cat.color"
+                                    total="paymentTotal(cat.key)"
+                                    trend="state.data.payment_trend || []"
+                                    currencyId="currencyId"/>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fa fa-balance-scale text-primary me-2"/>
+                                <span class="fw-bold">Comparative — Payment Types</span>
+                            </div>
+                            <BillingPaymentComparativeChart
+                                categories="state.data.payment_categories || []"
+                                trend="state.data.payment_trend || []"
+                                currencyId="currencyId"/>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- KPI cards — full-width strip below the charts -->
                 <div class="row g-2 mb-3 o_billing_kpis">
                     <div class="col-xl-2 col-md-4 col-6">
