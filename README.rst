@@ -42,6 +42,10 @@ Features
 * Daily-trend chart (Chart.js) with stacked bars (paid / pending) and a
   line for the total invoiced amount.
 * Top-10 customers panel (by total invoiced).
+* Payment-type cash-up panel ("cuadre diario" / arqueo) — splits
+  collected amounts into four buckets (Cash, Card, Transfer, Bank) and
+  renders both a per-bucket trend chart and a comparative chart
+  (donut + stacked bar).
 * PDF and Excel exports launched directly from the dashboard.
 * Single source of truth — the dashboard, the PDF and the XLSX share
   the **same** dataset, so totals and per-line values stay in sync
@@ -161,13 +165,17 @@ Models
    Returns a JSON-serialisable payload::
 
        {
-           "options":      <normalised filter dict>,
-           "lines":        [<per-invoice row>, ...],
-           "totals":       {<aggregated KPIs>},
-           "top_customers":[<top-10 by total>, ...],
-           "trend":        [<{date, invoiced, paid, pending}>, ...],
-           "company":      {<id, name, currency_id, currency_symbol>},
-           "generated_at": <ISO timestamp>,
+           "options":          <normalised filter dict>,
+           "lines":            [<per-invoice row>, ...],
+           "totals":           {<aggregated KPIs>},
+           "top_customers":    [<top-10 by total>, ...],
+           "trend":            [<{date, invoiced, paid, pending}>, ...],
+           "payment_categories":   [<{key, label, amount}>, ...],
+           "payment_totals":       {<{cash, card, transfer, bank, other}>},
+           "payment_total_collected": <float>,
+           "payment_trend":    [<{date, cash, card, transfer, bank, other}>, ...],
+           "company":          {<id, name, currency_id, currency_symbol>},
+           "generated_at":     <ISO timestamp>,
        }
 
    Supporting helpers:
@@ -182,6 +190,19 @@ Models
    * ``_get_ncf(move)``, ``_get_discount_amount(move)``,
      ``_get_itbis_amount(move)``, ``_get_payment_method_label(move)``,
      ``_get_status(move)`` — column-level extractors.
+   * ``_classify_payment(payment)`` — bucket an
+     ``account.payment`` into one of *cash / card / transfer / bank /
+     other*. Resolution order:
+
+     #. ``journal.type == 'cash'`` always maps to *cash*.
+     #. The payment-method-line name and the underlying payment
+        method ``code`` / ``name`` are scanned against the keyword
+        buckets in ``PAYMENT_CATEGORY_KEYWORDS`` (card / transfer).
+     #. ``journal.type == 'bank'`` defaults to *bank*.
+     #. Anything else falls back to *other*.
+
+   * ``_get_payment_breakdown(move)`` — sum each reconciled payment
+     into the corresponding bucket; refunds are signed negative.
 
 ``billing.report.wizard`` *(TransientModel)*
    UI entry point. Converts wizard fields into the canonical

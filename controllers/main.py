@@ -181,14 +181,24 @@ class BillingReportController(http.Controller):
         sheet.write(row, 11, "", total_value_fmt)
         row += 2
 
+        # Pre-translate strings used by the nested writer. ``_()``
+        # inside a nested closure cannot see the outer ``context``
+        # local (Odoo's translate framework only inspects the current
+        # frame's locals), so resolving here keeps the translation
+        # path warning-free.
+        br_invoices_label = _("Invoices")
+        br_total_invoiced_label = _("Total Invoiced")
+        br_paid_label = _("Paid")
+        br_pending_label = _("Pending")
+
         # Reusable user-breakdown writer (Salesperson / Created By).
         def _write_user_breakdown(start_row, title, header_label, rows):
             r = start_row
             sheet.merge_range(r, 0, r, 4, title, title_fmt)
             r += 1
             br_headers = [
-                header_label, _("Invoices"), _("Total Invoiced"),
-                _("Paid"), _("Pending"),
+                header_label, br_invoices_label, br_total_invoiced_label,
+                br_paid_label, br_pending_label,
             ]
             for col, label in enumerate(br_headers):
                 sheet.write(r, col, label, header_fmt)
@@ -214,6 +224,25 @@ class BillingReportController(http.Controller):
             row = _write_user_breakdown(
                 row, _("By Created By"), _("Created By"), creators,
             )
+
+        # Payment-category breakdown — drives the daily cash-up.
+        payment_categories = data.get("payment_categories") or []
+        if payment_categories:
+            sheet.merge_range(row, 0, row, 4, _("By Payment Type"), title_fmt)
+            row += 1
+            for col, label in enumerate([_("Payment Type"), _("Amount Collected")]):
+                sheet.write(row, col, label, header_fmt)
+            sheet.set_row(row, 22)
+            row += 1
+            for cat in payment_categories:
+                sheet.write(row, 0, cat.get("label") or "", text_fmt)
+                sheet.write_number(row, 1, cat.get("amount") or 0.0, money_fmt)
+                row += 1
+            sheet.write(row, 0, _("Total Collected"), total_label_fmt)
+            sheet.write_number(
+                row, 1, data.get("payment_total_collected") or 0.0, total_value_fmt,
+            )
+            row += 2
 
         workbook.close()
         return buffer.getvalue()

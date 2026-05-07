@@ -609,3 +609,81 @@ msgstr "Creado Por — Detalle"
 msgid "By Created By"
 msgstr "Por Creador"
 
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Cash"
+msgstr "Efectivo"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Card"
+msgstr "Tarjeta"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Transfer"
+msgstr "Transferencia"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/js/billing_dashboard.js:0
+msgid "Bank"
+msgstr "Banco"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/models/billing_report.py:0
+msgid "Other"
+msgstr "Otro"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/controllers/main.py:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "By Payment Type"
+msgstr "Por Tipo de Pago"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/controllers/main.py:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Payment Type"
+msgstr "Tipo de Pago"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/controllers/main.py:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Amount Collected"
+msgstr "Monto Cobrado"
+
+#. module: custom_billing_report
+#. odoo-python
+#: code:addons/custom_billing_report/controllers/main.py:0
+#: model_terms:ir.ui.view,arch_db:custom_billing_report.report_billing_template
+msgid "Total Collected"
+msgstr "Total Cobrado"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Payment Breakdown — Daily Cash-up"
+msgstr "Desglose de Pagos — Cuadre Diario"
+
+#. module: custom_billing_report
+#. odoo-javascript
+#: code:addons/custom_billing_report/static/src/xml/billing_dashboard.xml:0
+msgid "Comparative — Payment Types"
+msgstr "Comparativo — Tipos de Pago"
+

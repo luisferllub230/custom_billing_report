@@ -340,3 +340,151 @@ class TestBillingReport(AccountTestInvoicingCommon):
         opts = self.service._default_options()
         self.assertEqual(opts["invoice_user_ids"], [])
         self.assertEqual(opts["create_user_ids"], [])
+
+    # ------------------------------------------------------------------
+    # Payment category classification
+    # ------------------------------------------------------------------
+
+    def test_empty_payment_breakdown_keys(self):
+        breakdown = self.service._empty_payment_breakdown()
+        self.assertEqual(
+            set(breakdown.keys()),
+            {"cash", "card", "transfer", "bank", "other"},
+        )
+        self.assertTrue(all(v == 0.0 for v in breakdown.values()))
+
+    def test_classify_payment_cash_journal(self):
+        """A payment booked through a cash journal goes to *cash*
+        regardless of the payment-method-line name."""
+        Journal = self.env["account.journal"]
+        cash_journal = Journal.search(
+            [("type", "=", "cash"), ("company_id", "=", self.company.id)],
+            limit=1,
+        )
+        if not cash_journal:
+            cash_journal = Journal.create({
+                "name": "Cash Test",
+                "code": "CSHT",
+                "type": "cash",
+                "company_id": self.company.id,
+            })
+        Payment = self.env["account.payment"]
+        method_line = cash_journal.inbound_payment_method_line_ids[:1]
+        payment_vals = {
+            "amount": 100.0,
+            "partner_id": self.partner_a.id,
+            "journal_id": cash_journal.id,
+            "payment_type": "inbound",
+            "partner_type": "customer",
+        }
+        if method_line:
+            payment_vals["payment_method_line_id"] = method_line.id
+        payment = Payment.create(payment_vals)
+        self.assertEqual(self.service._classify_payment(payment), "cash")
+
+    def test_classify_payment_card_keyword(self):
+        """A payment-method-line whose name contains *card* goes to the
+        card bucket even on a bank journal."""
+        bank_journal = self.env["account.journal"].search(
+            [("type", "=", "bank"), ("company_id", "=", self.company.id)],
+            limit=1,
+        )
+        manual_method = self.env.ref("account.account_payment_method_manual_in")
+        method_line = self.env["account.payment.method.line"].create({
+            "name": "Tarjeta de Credito",
+            "journal_id": bank_journal.id,
+            "payment_method_id": manual_method.id,
+        })
+        payment = self.env["account.payment"].create({
+            "amount": 50.0,
+            "partner_id": self.partner_a.id,
+            "journal_id": bank_journal.id,
+            "payment_method_line_id": method_line.id,
+            "payment_type": "inbound",
+            "partner_type": "customer",
+        })
+        self.assertEqual(self.service._classify_payment(payment), "card")
+
+    def test_classify_payment_transfer_keyword(self):
+        bank_journal = self.env["account.journal"].search(
+            [("type", "=", "bank"), ("company_id", "=", self.company.id)],
+            limit=1,
+        )
+        manual_method = self.env.ref("account.account_payment_method_manual_in")
+        method_line = self.env["account.payment.method.line"].create({
+            "name": "Transferencia Bancaria",
+            "journal_id": bank_journal.id,
+            "payment_method_id": manual_method.id,
+        })
+        payment = self.env["account.payment"].create({
+            "amount": 75.0,
+            "partner_id": self.partner_a.id,
+            "journal_id": bank_journal.id,
+            "payment_method_line_id": method_line.id,
+            "payment_type": "inbound",
+            "partner_type": "customer",
+        })
+        self.assertEqual(self.service._classify_payment(payment), "transfer")
+
+    def test_classify_payment_bank_default(self):
+        """A bank payment with a generic method falls back to *bank*."""
+        bank_journal = self.env["account.journal"].search(
+            [("type", "=", "bank"), ("company_id", "=", self.company.id)],
+            limit=1,
+        )
+        # Reuse the journal's default inbound method line — its name
+        # ("Manual" by default) doesn't trigger any keyword bucket.
+        method_line = bank_journal.inbound_payment_method_line_ids[:1]
+        payment = self.env["account.payment"].create({
+            "amount": 25.0,
+            "partner_id": self.partner_a.id,
+            "journal_id": bank_journal.id,
+            "payment_method_line_id": method_line.id if method_line else False,
+            "payment_type": "inbound",
+            "partner_type": "customer",
+        })
+        self.assertEqual(self.service._classify_payment(payment), "bank")
+
+    def test_get_report_data_payment_payload(self):
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "company_ids": [self.company.id],
+        })
+        self.assertIn("payment_categories", data)
+        self.assertIn("payment_totals", data)
+        self.assertIn("payment_trend", data)
+        self.assertIn("payment_total_collected", data)
+        keys = {entry["key"] for entry in data["payment_categories"]}
+        self.assertEqual(keys, {"cash", "card", "transfer", "bank", "other"})
+        # Per-bucket trend rows must expose every category key so the
+        # comparative chart can iterate without conditionals.
+        if data["payment_trend"]:
+            sample = data["payment_trend"][0]
+            for cat in ("cash", "card", "transfer", "bank", "other"):
+                self.assertIn(cat, sample)
+
+    def test_build_line_includes_payment_breakdown(self):
+        line = self.service._build_line(self.move_paid)
+        self.assertIn("payment_breakdown", line)
+        self.assertEqual(
+            set(line["payment_breakdown"].keys()),
+            {"cash", "card", "transfer", "bank", "other"},
+        )
+
+    def test_payment_totals_sum_paid_amount(self):
+        """``move_paid`` was registered through a bank journal with the
+        default *Manual* method line, so its 1180.00 collected amount
+        falls into the *bank* bucket."""
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "company_ids": [self.company.id],
+        })
+        # Total collected across buckets must equal Total Paid (no
+        # partial payments in this fixture).
+        self.assertAlmostEqual(
+            data["payment_total_collected"],
+            data["totals"]["total_paid"],
+            places=2,
+        )

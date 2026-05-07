@@ -15,6 +15,8 @@ import { BillingPaidPieChart } from "./billing_paid_pie_chart";
 import { BillingTopCustomersChart } from "./billing_top_customers_chart";
 import { BillingTopSalespersonsChart } from "./billing_top_salespersons_chart";
 import { BillingTopCreatorsChart } from "./billing_top_creators_chart";
+import { BillingPaymentCategoryChart } from "./billing_payment_category_chart";
+import { BillingPaymentComparativeChart } from "./billing_payment_comparative_chart";
 
 const PAGE_SIZE = 50;
 
@@ -25,6 +27,7 @@ export class BillingDashboard extends Component {
         BillingTrendChart, BillingHealthGauge,
         BillingPaidPieChart, BillingTopCustomersChart,
         BillingTopSalespersonsChart, BillingTopCreatorsChart,
+        BillingPaymentCategoryChart, BillingPaymentComparativeChart,
     };
     static props = ["*"];
 
@@ -69,6 +72,10 @@ export class BillingDashboard extends Component {
                 top_customers: [],
                 top_salespersons: [],
                 top_creators: [],
+                payment_categories: [],
+                payment_totals: { cash: 0, card: 0, transfer: 0, bank: 0, other: 0 },
+                payment_total_collected: 0,
+                payment_trend: [],
                 health: {
                     status: "neutral", label: "",
                     ratio: 0,
@@ -85,6 +92,16 @@ export class BillingDashboard extends Component {
             { key: "this_week", label: _t("This Week") },
             { key: "this_month", label: _t("This Month") },
             { key: "last_month", label: _t("Last Month") },
+        ];
+
+        // Per-category presentation config — drives the small per-bucket
+        // charts and KPI strip. Keep keys/colours aligned with the
+        // comparative chart so both views read as one coherent set.
+        this.paymentCategoryConfig = [
+            { key: "cash", label: _t("Cash"), icon: "fa-money", color: "#198754" },
+            { key: "card", label: _t("Card"), icon: "fa-credit-card", color: "#0d6efd" },
+            { key: "transfer", label: _t("Transfer"), icon: "fa-exchange", color: "#6f42c1" },
+            { key: "bank", label: _t("Bank"), icon: "fa-university", color: "#fd7e14" },
         ];
 
         this.granularities = [
@@ -149,6 +166,11 @@ export class BillingDashboard extends Component {
 
     get currencyId() {
         return this.state.data.company && this.state.data.company.currency_id;
+    }
+
+    paymentTotal(key) {
+        const totals = this.state.data.payment_totals || {};
+        return totals[key] || 0;
     }
 
     // ----------------------------------------------------------------

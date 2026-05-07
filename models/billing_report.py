@@ -37,6 +37,26 @@ PAID_STATES = ("paid", "in_payment", "reversed")
 #: ``payment_state`` values that we treat as "still owed".
 UNPAID_STATES = ("not_paid", "partial")
 
+#: Payment categories surfaced as separate totals/charts so the
+#: cashier can run the daily cash-up ("cuadre diario"). Order matters
+#: — used for chart series order and PDF column order.
+PAYMENT_CATEGORIES = ("cash", "card", "transfer", "bank", "other")
+
+#: Keyword buckets used to classify a payment into one of the
+#: categories above. Matching is case-insensitive against both the
+#: payment-method-line name and the underlying payment method code.
+#: Order is important — the first matching bucket wins, so put the
+#: most specific keywords (card / transfer) before the catch-alls.
+PAYMENT_CATEGORY_KEYWORDS = {
+    "card": (
+        "card", "tarjeta", "credit", "debit", "debito", "credito", "visa",
+        "mastercard", "amex", "pos",
+    ),
+    "transfer": (
+        "transfer", "transferencia", "wire", "ach", "swift", "sinpe",
+    ),
+}
+
 
 class BillingReport(models.AbstractModel):
     """Service model — builds the billing dataset from filter options.
@@ -218,6 +238,67 @@ class BillingReport(models.AbstractModel):
         return ", ".join(n for n in names if n)
 
     @api.model
+    def _classify_payment(self, payment):
+        """Return the category bucket (``cash``/``card``/``transfer``/
+        ``bank``/``other``) for an ``account.payment`` record.
+
+        Resolution order:
+
+        1. ``journal.type == 'cash'`` always wins — physical cash
+           handled in a cash journal goes to the *cash* bucket no
+           matter how the payment method is named.
+        2. ``payment_method_line.name`` and the underlying payment
+           method ``code`` are scanned against the keyword buckets in
+           :data:`PAYMENT_CATEGORY_KEYWORDS` (card, transfer).
+        3. ``journal.type == 'bank'`` defaults to *bank*.
+        4. Anything else falls back to *other*.
+        """
+        journal = payment.journal_id
+        if journal and journal.type == "cash":
+            return "cash"
+
+        method_line = payment.payment_method_line_id
+        haystack_parts = []
+        if method_line:
+            haystack_parts.append((method_line.name or "").lower())
+            method = method_line.payment_method_id
+            if method:
+                haystack_parts.append((method.code or "").lower())
+                haystack_parts.append((method.name or "").lower())
+        haystack = " ".join(p for p in haystack_parts if p)
+
+        if haystack:
+            for category, keywords in PAYMENT_CATEGORY_KEYWORDS.items():
+                if any(kw in haystack for kw in keywords):
+                    return category
+
+        if journal and journal.type == "bank":
+            return "bank"
+        return "other"
+
+    @api.model
+    def _empty_payment_breakdown(self):
+        """Return a fresh ``{category: 0.0}`` dict in canonical order."""
+        return {cat: 0.0 for cat in PAYMENT_CATEGORIES}
+
+    @api.model
+    def _get_payment_breakdown(self, move):
+        """Sum each reconciled payment of ``move`` into its category.
+
+        Refunds are signed negative so they reduce the cash-up total
+        for the corresponding bucket — which is what the daily arqueo
+        expects (a returned card sale shrinks the *card* total).
+        """
+        breakdown = self._empty_payment_breakdown()
+        if "matched_payment_ids" not in move._fields:
+            return breakdown
+        sign = -1 if move.move_type == "out_refund" else 1
+        for payment in move.matched_payment_ids:
+            category = self._classify_payment(payment)
+            breakdown[category] += sign * (payment.amount or 0.0)
+        return breakdown
+
+    @api.model
     def _get_status(self, move):
         """Return ``(code, label)`` for the human-readable payment state."""
         if move.payment_state in PAID_STATES:
@@ -246,11 +327,27 @@ class BillingReport(models.AbstractModel):
             "amount_residual": move.amount_residual,
             "amount_paid": move.amount_total - move.amount_residual,
             "payment_method": self._get_payment_method_label(move),
+            "payment_breakdown": self._get_payment_breakdown(move),
             "payment_state": status_code,
             "status_label": status_label,
             "currency_id": move.currency_id.id,
             "currency_symbol": move.currency_id.symbol or move.currency_id.name,
         }
+
+    @api.model
+    def _get_payment_category_labels(self):
+        """Return ordered ``[(key, label), ...]`` for each category.
+
+        Centralises the translation strings so PDF / XLSX / dashboard
+        all surface the buckets with the same wording.
+        """
+        return [
+            ("cash", _("Cash")),
+            ("card", _("Card")),
+            ("transfer", _("Transfer")),
+            ("bank", _("Bank")),
+            ("other", _("Other")),
+        ]
 
     # ------------------------------------------------------------------
     # Public API
@@ -422,6 +519,39 @@ class BillingReport(models.AbstractModel):
         trend, granularity = self._build_trend(options, lines)
         options["trend_granularity"] = granularity
 
+        # Payment-category aggregates — used by the cash-up workflow
+        # ("cuadre diario" / arqueo) and the dashboard charts. We emit
+        # both flat totals and a per-bucket trend so the comparative
+        # chart can reuse the same series shape as ``trend``.
+        payment_totals = self._empty_payment_breakdown()
+        payment_trend_buckets = {}
+        for line in lines:
+            breakdown = line.get("payment_breakdown") or {}
+            for category in PAYMENT_CATEGORIES:
+                payment_totals[category] += breakdown.get(category, 0.0)
+            day = line["invoice_date"]
+            if not day:
+                continue
+            key = self._bucket_key(day, granularity)
+            slot = payment_trend_buckets.setdefault(
+                key, self._empty_payment_breakdown()
+            )
+            for category in PAYMENT_CATEGORIES:
+                slot[category] += breakdown.get(category, 0.0)
+        payment_trend = [
+            {"date": k, **v} for k, v in sorted(payment_trend_buckets.items())
+        ]
+        category_labels = dict(self._get_payment_category_labels())
+        payment_categories = [
+            {
+                "key": cat,
+                "label": category_labels[cat],
+                "amount": payment_totals[cat],
+            }
+            for cat in PAYMENT_CATEGORIES
+        ]
+        payment_total_collected = sum(payment_totals.values())
+
         # Filter-aware breakdowns shown in the PDF/Excel summary panel.
         # We always emit the same keys so the template can iterate
         # without conditionals.
@@ -500,6 +630,10 @@ class BillingReport(models.AbstractModel):
                 },
             },
             "breakdown_doc_type": breakdown_doc_type,
+            "payment_categories": payment_categories,
+            "payment_totals": payment_totals,
+            "payment_total_collected": payment_total_collected,
+            "payment_trend": payment_trend,
             "company": {
                 "id": company.id,
                 "name": company.name,

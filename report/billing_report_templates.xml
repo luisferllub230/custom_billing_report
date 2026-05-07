@@ -11,6 +11,8 @@
                 <t t-set="doc_type_breakdown" t-value="data.get('breakdown_doc_type') or []"/>
                 <t t-set="salespersons" t-value="data.get('top_salespersons') or []"/>
                 <t t-set="creators" t-value="data.get('top_creators') or []"/>
+                <t t-set="payment_categories" t-value="data.get('payment_categories') or []"/>
+                <t t-set="payment_total_collected" t-value="data.get('payment_total_collected') or 0.0"/>
 
                 <div class="page">
                     <div class="oe_structure"/>
@@ -159,6 +161,41 @@
                                         </td>
                                     </tr>
                                 </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Payment categories breakdown — daily cash-up -->
+                    <div class="row mb-4" t-if="payment_categories">
+                        <div class="col-12">
+                            <h3 class="mb-2">By Payment Type</h3>
+                            <table class="table table-sm o_main_table">
+                                <thead>
+                                    <tr>
+                                        <th>Payment Type</th>
+                                        <th class="text-end">Amount Collected</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="payment_categories" t-as="cat">
+                                        <td><span t-esc="cat['label']"/></td>
+                                        <td class="text-end">
+                                            <span t-esc="cat['amount']"
+                                                  t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td class="text-end"><strong>Total Collected</strong></td>
+                                        <td class="text-end">
+                                            <strong>
+                                                <span t-esc="payment_total_collected"
+                                                      t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                            </strong>
+                                        </td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>

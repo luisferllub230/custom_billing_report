@@ -158,6 +158,71 @@
         canvas {
             max-height: 100%;
         }
+
+        // Smaller variant used by the per-category cash-up trends —
+        // four mini-charts stack into one card so each one stays
+        // glanceable without dominating the page.
+        &.o_billing_chart_wrapper_sm {
+            height: 160px;
+        }
+
+        // Medium variant for the comparative panel (donut + bar).
+        &.o_billing_chart_wrapper_md {
+            height: 240px;
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Payment-type cash-up panel
+    // ----------------------------------------------------------------
+
+    .o_billing_payment_panel {
+        .o_billing_payment_kpi {
+            background-color: var(--bs-body-bg);
+            color: var(--bs-body-color);
+            border: 1px solid var(--bs-border-color);
+            border-left: 3px solid var(--o-billing-payment-color, var(--bs-primary));
+
+            .o_billing_kpi_icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: var(--bs-tertiary-bg);
+                color: var(--o-billing-payment-color, var(--bs-secondary-color));
+                font-size: 1rem;
+                flex-shrink: 0;
+            }
+
+            .o_billing_kpi_label {
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+                color: var(--bs-secondary-color);
+                font-weight: 500;
+                line-height: 1.1;
+            }
+
+            .o_billing_kpi_value {
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: var(--bs-body-color);
+                line-height: 1.2;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+        }
+    }
+
+    .o_billing_payment_dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: var(--bs-secondary);
     }
 
     // ----------------------------------------------------------------
