@@ -426,6 +426,32 @@ class TestBillingReport(AccountTestInvoicingCommon):
         })
         self.assertEqual(self.service._classify_payment(payment), "transfer")
 
+    def test_classify_payment_cash_keyword_on_bank_journal(self):
+        """A method line named "Efectivo" on a bank journal still routes
+        to the *cash* bucket. Common DR setup: the daily cash deposit is
+        booked against a bank journal but the method line keeps the
+        cashier-friendly name. Without this the cash-up section would
+        show 0 even when paid cash invoices exist (see #fix-002)."""
+        bank_journal = self.env["account.journal"].search(
+            [("type", "=", "bank"), ("company_id", "=", self.company.id)],
+            limit=1,
+        )
+        manual_method = self.env.ref("account.account_payment_method_manual_in")
+        method_line = self.env["account.payment.method.line"].create({
+            "name": "Efectivo",
+            "journal_id": bank_journal.id,
+            "payment_method_id": manual_method.id,
+        })
+        payment = self.env["account.payment"].create({
+            "amount": 33.0,
+            "partner_id": self.partner_a.id,
+            "journal_id": bank_journal.id,
+            "payment_method_line_id": method_line.id,
+            "payment_type": "inbound",
+            "partner_type": "customer",
+        })
+        self.assertEqual(self.service._classify_payment(payment), "cash")
+
     def test_classify_payment_bank_default(self):
         """A bank payment with a generic method falls back to *bank*."""
         bank_journal = self.env["account.journal"].search(
