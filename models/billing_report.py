@@ -46,8 +46,16 @@ PAYMENT_CATEGORIES = ("cash", "card", "transfer", "bank", "other")
 #: categories above. Matching is case-insensitive against both the
 #: payment-method-line name and the underlying payment method code.
 #: Order is important — the first matching bucket wins, so put the
-#: most specific keywords (card / transfer) before the catch-alls.
+#: most specific keywords (cash / card / transfer) before the catch-
+#: alls. ``cash`` is listed first so that a method/journal named
+#: "Efectivo" (or any cash synonym) gets routed to the cash bucket
+#: even when the underlying journal is of type ``bank`` — common in
+#: setups where the daily cash deposit is booked against a bank
+#: journal instead of a dedicated cash journal.
 PAYMENT_CATEGORY_KEYWORDS = {
+    "cash": (
+        "cash", "efectivo", "contado", "caja",
+    ),
     "card": (
         "card", "tarjeta", "credit", "debit", "debito", "credito", "visa",
         "mastercard", "amex", "pos",
