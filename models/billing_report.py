@@ -195,12 +195,57 @@ class BillingReport(models.AbstractModel):
             return move.l10n_latam_document_number
         return ""
 
+    # ------------------------------------------------------------------
+    # Currency conversion
+    # ------------------------------------------------------------------
+    #
+    # Invoices may be issued in a foreign currency (e.g. USD) while the
+    # company keeps its books in DOP. Every monetary figure surfaced by
+    # the report is normalised to the company currency *at the rate that
+    # was booked on the document* ("la tasa aplicada en ese momento"),
+    # so totals across mixed-currency invoices add up correctly instead
+    # of summing raw foreign amounts.
+
+    @api.model
+    def _conversion_rate(self, from_currency, company, conv_date):
+        """Return the company-per-``from_currency`` rate on ``conv_date``.
+
+        ``1.0`` when no conversion is needed (missing currency or the
+        document is already in the company currency). Used as the
+        fallback for documents whose own amounts cannot yield a booked
+        rate (e.g. a zero-total move) and for POS rows.
+        """
+        company_currency = company.currency_id
+        if not from_currency or from_currency == company_currency:
+            return 1.0
+        conv_date = conv_date or fields.Date.context_today(self)
+        return from_currency._convert(1.0, company_currency, company, conv_date)
+
+    @api.model
+    def _move_rate(self, move):
+        """Return the company-per-document-currency rate booked on ``move``.
+
+        Derived from the move's own signed amounts so it reflects the FX
+        rate captured at posting time rather than today's rate table.
+        Falls back to the dated rate when the move carries no total.
+        """
+        if move.currency_id == move.company_currency_id:
+            return 1.0
+        doc_amount = move.amount_total_in_currency_signed
+        comp_amount = move.amount_total_signed
+        if doc_amount and comp_amount:
+            return abs(comp_amount / doc_amount)
+        return self._conversion_rate(
+            move.currency_id, move.company_id, move.invoice_date
+        )
+
     @api.model
     def _get_discount_amount(self, move):
-        """Sum of line discounts (in company currency) for ``move``.
+        """Sum of line discounts (in the document currency) for ``move``.
 
         Computed from ``invoice_line_ids`` so it ignores tax / payment
-        terms / section lines.
+        terms / section lines. Callers convert the result to the company
+        currency at the move's booked rate.
         """
         sign = -1 if move.move_type == "out_refund" else 1
         total = 0.0
@@ -212,13 +257,18 @@ class BillingReport(models.AbstractModel):
         return sign * total
 
     @api.model
-    def _get_itbis_amount(self, move):
-        """Return the ITBIS portion of ``amount_tax``.
+    def _get_itbis_amount(self, move, rate=1.0):
+        """Return the ITBIS portion of ``amount_tax`` in company currency.
 
         We consider a tax to be ITBIS when its name contains the
         substring "ITBIS" (case-insensitive). When no such tax is
         found we fall back to the full ``amount_tax`` so the column is
         never empty on non-RD installs.
+
+        ``rate`` is the move's booked company-per-document rate; it is
+        only applied to the ``amount_tax`` fallback, which is expressed
+        in the document currency. The ITBIS tax lines are read from
+        ``balance`` which is already in the company currency.
         """
         itbis = 0.0
         found = False
@@ -232,7 +282,8 @@ class BillingReport(models.AbstractModel):
                 itbis += abs(tax_line.balance)
                 found = True
         if not found:
-            return move.amount_tax
+            fallback = move.company_currency_id.round(move.amount_tax * rate)
+            return -fallback if move.move_type == "out_refund" else fallback
         # Match the sign convention of refunds.
         return -itbis if move.move_type == "out_refund" else itbis
 
@@ -375,14 +426,45 @@ class BillingReport(models.AbstractModel):
         if pos_orders:
             for payment in pos_orders.payment_ids:
                 category = self._classify_pos_payment(payment)
-                breakdown[category] += sign * (payment.amount or 0.0)
+                breakdown[category] += sign * self._pos_payment_company_amount(payment)
             return breakdown
         if "matched_payment_ids" not in move._fields:
             return breakdown
         for payment in move.matched_payment_ids:
             category = self._classify_payment(payment)
-            breakdown[category] += sign * (payment.amount or 0.0)
+            breakdown[category] += sign * self._payment_company_amount(payment)
         return breakdown
+
+    @api.model
+    def _payment_company_amount(self, payment):
+        """Return an ``account.payment`` amount in the company currency.
+
+        Prefers the move's stored company-currency figure (booked rate);
+        falls back to a dated conversion of ``amount`` when the field is
+        unavailable.
+        """
+        if "amount_company_currency_signed" in payment._fields:
+            return abs(payment.amount_company_currency_signed)
+        rate = self._conversion_rate(
+            payment.currency_id, payment.company_id, payment.date
+        )
+        return payment.company_id.currency_id.round((payment.amount or 0.0) * rate)
+
+    @api.model
+    def _pos_payment_company_amount(self, pos_payment):
+        """Return a ``pos.payment`` amount in the company currency.
+
+        POS payments are expressed in the order currency; we convert at
+        the payment date so a foreign-currency POS sale lands in the
+        cash-up at the company-currency value.
+        """
+        order = pos_payment.pos_order_id
+        company = order.company_id if order else self.env.company
+        currency = order.currency_id if order else company.currency_id
+        rate = self._conversion_rate(
+            currency, company, pos_payment.payment_date or (order and order.date_order)
+        )
+        return company.currency_id.round((pos_payment.amount or 0.0) * rate)
 
     @api.model
     def _get_status(self, move):
@@ -393,8 +475,19 @@ class BillingReport(models.AbstractModel):
 
     @api.model
     def _build_line(self, move):
-        """Render a single move into the report row dict."""
+        """Render a single move into the report row dict.
+
+        All monetary fields are normalised to the company currency at
+        the move's booked exchange rate so that rows in different
+        currencies (e.g. USD invoices) sum correctly with the rest.
+        """
         status_code, status_label = self._get_status(move)
+        company_currency = move.company_currency_id
+        rate = self._move_rate(move)
+        amount_untaxed = company_currency.round(move.amount_untaxed * rate)
+        amount_total = company_currency.round(move.amount_total * rate)
+        amount_residual = company_currency.round(move.amount_residual * rate)
+        discount = company_currency.round(self._get_discount_amount(move) * rate)
         return {
             "id": move.id,
             "invoice_date": fields.Date.to_string(move.invoice_date) if move.invoice_date else "",
@@ -406,18 +499,18 @@ class BillingReport(models.AbstractModel):
             "create_user_id": move.create_uid.id if move.create_uid else False,
             "create_user_name": move.create_uid.display_name or "",
             "ncf": self._get_ncf(move),
-            "amount_untaxed": move.amount_untaxed,
-            "discount": self._get_discount_amount(move),
-            "amount_tax": self._get_itbis_amount(move),
-            "amount_total": move.amount_total,
-            "amount_residual": move.amount_residual,
-            "amount_paid": move.amount_total - move.amount_residual,
+            "amount_untaxed": amount_untaxed,
+            "discount": discount,
+            "amount_tax": self._get_itbis_amount(move, rate),
+            "amount_total": amount_total,
+            "amount_residual": amount_residual,
+            "amount_paid": amount_total - amount_residual,
             "payment_method": self._get_payment_method_label(move),
             "payment_breakdown": self._get_payment_breakdown(move),
             "payment_state": status_code,
             "status_label": status_label,
-            "currency_id": move.currency_id.id,
-            "currency_symbol": move.currency_id.symbol or move.currency_id.name,
+            "currency_id": company_currency.id,
+            "currency_symbol": company_currency.symbol or company_currency.name,
         }
 
     @api.model
@@ -480,13 +573,18 @@ class BillingReport(models.AbstractModel):
         never produced an invoice, otherwise revenue would be double-
         counted.
         """
+        company = order.company_id or self.env.company
+        company_currency = company.currency_id
+        rate = self._conversion_rate(order.currency_id, company, order.date_order)
         breakdown = self._empty_payment_breakdown()
         for payment in order.payment_ids:
-            breakdown[self._classify_pos_payment(payment)] += payment.amount or 0.0
+            breakdown[self._classify_pos_payment(payment)] += (
+                self._pos_payment_company_amount(payment)
+            )
         names = order.payment_ids.mapped("payment_method_id.name")
         payment_label = ", ".join(n for n in names if n)
-        amount_paid = order.amount_paid or 0.0
-        amount_total = order.amount_total or 0.0
+        amount_paid = company_currency.round((order.amount_paid or 0.0) * rate)
+        amount_total = company_currency.round((order.amount_total or 0.0) * rate)
         amount_residual = max(0.0, amount_total - amount_paid)
         is_paid = abs(amount_residual) < 0.005
         status_code = "paid" if is_paid else "pending"
@@ -498,6 +596,7 @@ class BillingReport(models.AbstractModel):
             )
         partner = order.partner_id
         cashier = order.user_id
+        amount_tax = company_currency.round((order.amount_tax or 0.0) * rate)
         return {
             "id": order.id,
             "source": "pos",
@@ -510,9 +609,9 @@ class BillingReport(models.AbstractModel):
             "create_user_id": cashier.id if cashier else False,
             "create_user_name": cashier.display_name if cashier else "",
             "ncf": self._get_pos_ncf(order),
-            "amount_untaxed": amount_total - (order.amount_tax or 0.0),
+            "amount_untaxed": amount_total - amount_tax,
             "discount": 0.0,
-            "amount_tax": order.amount_tax or 0.0,
+            "amount_tax": amount_tax,
             "amount_total": amount_total,
             "amount_residual": amount_residual,
             "amount_paid": amount_paid,
@@ -520,8 +619,8 @@ class BillingReport(models.AbstractModel):
             "payment_breakdown": breakdown,
             "payment_state": status_code,
             "status_label": status_label,
-            "currency_id": order.currency_id.id,
-            "currency_symbol": order.currency_id.symbol or order.currency_id.name,
+            "currency_id": company_currency.id,
+            "currency_symbol": company_currency.symbol or company_currency.name,
         }
 
     @api.model

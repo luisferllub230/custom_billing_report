@@ -75,12 +75,13 @@ class TestBillingReport(AccountTestInvoicingCommon):
 
     def _create_invoice(self, partner, invoice_date, price,
                         discount=0.0, register_payment=False,
-                        invoice_user=None, create_user=None):
+                        invoice_user=None, create_user=None, currency=None):
         """Helper to post a customer invoice and optionally pay it.
 
         ``invoice_user`` sets ``invoice_user_id`` (salesperson).
         ``create_user`` runs the creation as that user so ``create_uid``
         reflects the desired creator (it cannot be set explicitly).
+        ``currency`` issues the invoice in a foreign currency.
         """
         env = self.env
         if create_user is not None:
@@ -100,6 +101,8 @@ class TestBillingReport(AccountTestInvoicingCommon):
         }
         if invoice_user is not None:
             vals["invoice_user_id"] = invoice_user.id
+        if currency is not None:
+            vals["currency_id"] = currency.id
         move = env["account.move"].create(vals)
         move.action_post()
         if register_payment:
@@ -325,6 +328,42 @@ class TestBillingReport(AccountTestInvoicingCommon):
         self.assertEqual(seller_entry["count"], 1)
         self.assertAlmostEqual(seller_entry["amount_total"], 1180.0, places=2)
         self.assertAlmostEqual(seller_entry["amount_paid"], 1180.0, places=2)
+
+    def test_foreign_currency_converted_to_company(self):
+        """A USD invoice is reported in the company currency at the
+        booked rate, not as raw foreign amounts."""
+        company_currency = self.company.currency_id
+        foreign = self.env["res.currency"].create({
+            "name": "TST",
+            "symbol": "T$",
+            "rounding": 0.01,
+        })
+        # 2 foreign units per company unit on the invoice date =>
+        # 1 foreign = 0.5 company.
+        self.env["res.currency.rate"].create({
+            "name": "2026-01-15",
+            "currency_id": foreign.id,
+            "company_id": self.company.id,
+            "rate": 2.0,
+        })
+        partner = self.env["res.partner"].create({"name": "Customer FX"})
+        self._create_invoice(
+            partner, date(2026, 1, 15), price=1000.0, currency=foreign,
+        )
+        data = self.service.get_report_data({
+            "date_from": "2026-01-01",
+            "date_to": "2026-01-31",
+            "partner_ids": [partner.id],
+            "company_ids": [self.company.id],
+        })
+        self.assertEqual(len(data["lines"]), 1)
+        line = data["lines"][0]
+        # 1180 foreign total (1000 + 18% ITBIS) -> 590 company.
+        self.assertAlmostEqual(line["amount_total"], 590.0, places=2)
+        self.assertAlmostEqual(line["amount_untaxed"], 500.0, places=2)
+        self.assertAlmostEqual(line["amount_tax"], 90.0, places=2)
+        self.assertEqual(line["currency_id"], company_currency.id)
+        self.assertAlmostEqual(data["totals"]["total_invoiced"], 590.0, places=2)
 
     def test_top_creators_payload(self):
         data = self.service.get_report_data({
