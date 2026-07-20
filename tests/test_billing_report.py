@@ -553,3 +553,65 @@ class TestBillingReport(AccountTestInvoicingCommon):
             data["totals"]["total_paid"],
             places=2,
         )
+
+    def test_classify_payment_deposit_method_not_card(self):
+        """A method line named "Depositos" must NOT land in the card
+        bucket: the ``pos`` keyword used to substring-match inside
+        "De*pos*itos". Word-boundary matching routes it to *bank*."""
+        bank_journal = self.env["account.journal"].search(
+            [("type", "=", "bank"), ("company_id", "=", self.company.id)],
+            limit=1,
+        )
+        manual_method = self.env.ref("account.account_payment_method_manual_in")
+        method_line = self.env["account.payment.method.line"].create({
+            "name": "Depositos",
+            "journal_id": bank_journal.id,
+            "payment_method_id": manual_method.id,
+        })
+        payment = self.env["account.payment"].create({
+            "amount": 60.0,
+            "partner_id": self.partner_a.id,
+            "journal_id": bank_journal.id,
+            "payment_method_line_id": method_line.id,
+            "payment_type": "inbound",
+            "partner_type": "customer",
+        })
+        self.assertEqual(self.service._classify_payment(payment), "bank")
+
+    def test_payment_breakdown_uses_allocated_amount(self):
+        """A single payment covering two invoices must contribute only
+        its allocated portion to each invoice's breakdown — not the
+        full payment amount twice."""
+        inv_a = self._create_invoice(
+            self.partner_a, date(2026, 2, 10), price=1000.0,
+        )
+        inv_b = self._create_invoice(
+            self.partner_a, date(2026, 2, 10), price=500.0,
+        )
+        self.env["account.payment.register"].with_context(
+            active_model="account.move",
+            active_ids=(inv_a + inv_b).ids,
+        ).create({"group_payment": True}).action_create_payments()
+
+        for move in (inv_a, inv_b):
+            breakdown = self.service._get_payment_breakdown(move)
+            self.assertAlmostEqual(
+                sum(breakdown.values()), move.amount_total, places=2,
+                msg="Breakdown must equal the amount applied to %s" % move.name,
+            )
+
+    def test_payment_breakdown_ignores_canceled_payment(self):
+        """A canceled payment contributes nothing to the breakdown even
+        if it stays referenced by the move."""
+        move = self._create_invoice(
+            self.partner_a, date(2026, 3, 5), price=300.0,
+            register_payment=True,
+        )
+        payments = self.env["account.payment"].search(
+            [("partner_id", "=", self.partner_a.id)],
+        ).filtered(lambda p: move in p.reconciled_invoice_ids)
+        self.assertTrue(payments)
+        payments.action_draft()
+        payments.action_cancel()
+        breakdown = self.service._get_payment_breakdown(move)
+        self.assertAlmostEqual(sum(breakdown.values()), 0.0, places=2)
