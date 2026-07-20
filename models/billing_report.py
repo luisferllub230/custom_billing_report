@@ -18,6 +18,8 @@ Odoo (no localization required). Optional Dominican Republic columns
 relevant modules are installed.
 """
 
+import re
+
 from datetime import date, datetime, timedelta
 
 from odoo import _, api, fields, models
@@ -36,6 +38,14 @@ PAID_STATES = ("paid", "in_payment", "reversed")
 
 #: ``payment_state`` values that we treat as "still owed".
 UNPAID_STATES = ("not_paid", "partial")
+
+#: ``account.payment`` states whose money never (or no longer) entered
+#: the till. Canceled/rejected payments can linger in
+#: ``matched_payment_ids`` (the m2m is not cleaned on cancellation), so
+#: every payment-reading path must skip these states or the cash-up
+#: double-counts. ``cancel`` is kept alongside ``canceled`` for
+#: compatibility with pre-18 state values.
+INVALID_PAYMENT_STATES = ("draft", "cancel", "canceled", "rejected")
 
 #: Payment categories surfaced as separate totals/charts so the
 #: cashier can run the daily cash-up ("cuadre diario"). Order matters
@@ -325,11 +335,27 @@ class BillingReport(models.AbstractModel):
         if pos_orders:
             names = pos_orders.payment_ids.mapped("payment_method_id.name")
             return ", ".join(n for n in names if n)
-        if "matched_payment_ids" not in move._fields:
-            return ""
-        payments = move.matched_payment_ids
+        # Same source as the payment breakdown — only payments whose
+        # money was actually applied to this move, so a canceled
+        # payment's method never shows up in the column.
+        payments = self.env["account.payment"]
+        for _amount, payment in self._iter_reconciled_payment_partials(move):
+            payments |= payment
         names = payments.mapped("payment_method_line_id.name")
         return ", ".join(n for n in names if n)
+
+    @api.model
+    def _match_payment_category(self, haystack):
+        """Return the keyword bucket for ``haystack`` or ``None``.
+
+        Keywords only match on word boundaries: a substring scan would
+        route "Depositos" to *card* because it contains ``pos``.
+        """
+        for category, keywords in PAYMENT_CATEGORY_KEYWORDS.items():
+            for keyword in keywords:
+                if re.search(r"\b%s\b" % re.escape(keyword), haystack):
+                    return category
+        return None
 
     @api.model
     def _classify_payment(self, payment):
@@ -362,9 +388,9 @@ class BillingReport(models.AbstractModel):
         haystack = " ".join(p for p in haystack_parts if p)
 
         if haystack:
-            for category, keywords in PAYMENT_CATEGORY_KEYWORDS.items():
-                if any(kw in haystack for kw in keywords):
-                    return category
+            category = self._match_payment_category(haystack)
+            if category:
+                return category
 
         if journal and journal.type == "bank":
             return "bank"
@@ -395,9 +421,9 @@ class BillingReport(models.AbstractModel):
             haystack_parts.append((journal.code or "").lower())
         haystack = " ".join(p for p in haystack_parts if p)
         if haystack:
-            for category, keywords in PAYMENT_CATEGORY_KEYWORDS.items():
-                if any(kw in haystack for kw in keywords):
-                    return category
+            category = self._match_payment_category(haystack)
+            if category:
+                return category
         if journal and journal.type == "bank":
             return "bank"
         return "other"
@@ -408,8 +434,46 @@ class BillingReport(models.AbstractModel):
         return {cat: 0.0 for cat in PAYMENT_CATEGORIES}
 
     @api.model
+    def _iter_reconciled_payment_partials(self, move):
+        """Yield ``(amount, payment)`` pairs for payments applied to ``move``.
+
+        Walks the ``account.partial.reconcile`` records on the move's
+        receivable/payable lines, so ``amount`` is the portion actually
+        allocated to *this* move in company currency — a payment that
+        covers several invoices only contributes its allocated share to
+        each one, and an overpayment never inflates the cash-up.
+
+        Counterparts that are not payments (credit notes reconciled
+        directly, exchange-difference entries, statement lines) are
+        skipped, as are payments in :data:`INVALID_PAYMENT_STATES` whose
+        stale matches would otherwise double-count.
+        """
+        term_lines = move.line_ids.filtered(
+            lambda l: l.account_id.account_type
+            in ("asset_receivable", "liability_payable")
+        )
+        for partial in term_lines.matched_credit_ids | term_lines.matched_debit_ids:
+            counterpart = (
+                partial.credit_move_id
+                if partial.debit_move_id.move_id == move
+                else partial.debit_move_id
+            )
+            counterpart_move = counterpart.move_id
+            # Odoo 18 links a payment's journal entry through
+            # ``origin_payment_id``; older versions used ``payment_id``.
+            payment = None
+            if "origin_payment_id" in counterpart_move._fields:
+                payment = counterpart_move.origin_payment_id
+            elif "payment_id" in counterpart_move._fields:
+                payment = counterpart_move.payment_id
+            if not payment or payment.state in INVALID_PAYMENT_STATES:
+                continue
+            yield partial.amount, payment
+
+    @api.model
     def _get_payment_breakdown(self, move):
-        """Sum each reconciled payment of ``move`` into its category.
+        """Sum the amount applied by each reconciled payment of ``move``
+        into its category.
 
         Refunds are signed negative so they reduce the cash-up total
         for the corresponding bucket — which is what the daily arqueo
@@ -418,7 +482,7 @@ class BillingReport(models.AbstractModel):
         Moves issued from POS read their breakdown from the linked
         ``pos.payment`` records instead: POS sessions reconcile through
         statement lines and may not produce ``account.payment`` rows,
-        so ``matched_payment_ids`` would under-report cash collections.
+        so the reconciliation walk would under-report cash collections.
         """
         breakdown = self._empty_payment_breakdown()
         sign = -1 if move.move_type == "out_refund" else 1
@@ -428,27 +492,10 @@ class BillingReport(models.AbstractModel):
                 category = self._classify_pos_payment(payment)
                 breakdown[category] += sign * self._pos_payment_company_amount(payment)
             return breakdown
-        if "matched_payment_ids" not in move._fields:
-            return breakdown
-        for payment in move.matched_payment_ids:
+        for amount, payment in self._iter_reconciled_payment_partials(move):
             category = self._classify_payment(payment)
-            breakdown[category] += sign * self._payment_company_amount(payment)
+            breakdown[category] += sign * amount
         return breakdown
-
-    @api.model
-    def _payment_company_amount(self, payment):
-        """Return an ``account.payment`` amount in the company currency.
-
-        Prefers the move's stored company-currency figure (booked rate);
-        falls back to a dated conversion of ``amount`` when the field is
-        unavailable.
-        """
-        if "amount_company_currency_signed" in payment._fields:
-            return abs(payment.amount_company_currency_signed)
-        rate = self._conversion_rate(
-            payment.currency_id, payment.company_id, payment.date
-        )
-        return payment.company_id.currency_id.round((payment.amount or 0.0) * rate)
 
     @api.model
     def _pos_payment_company_amount(self, pos_payment):
